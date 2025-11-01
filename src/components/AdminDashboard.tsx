@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3 } from 'lucide-react';
 import { MenuItem, Variation, AddOn } from '../types';
 import { addOnCategories } from '../data/menuData';
 import { useMenu } from '../hooks/useMenu';
-import { useCategories, Category } from '../hooks/useCategories';
+import { useCategories } from '../hooks/useCategories';
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
 import PaymentMethodManager from './PaymentMethodManager';
 import SiteSettingsManager from './SiteSettingsManager';
+import POSDashboard from './POSDashboard';
 
 const AdminDashboard: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -17,7 +18,7 @@ const AdminDashboard: React.FC = () => {
   const [loginError, setLoginError] = useState('');
   const { menuItems, loading, addMenuItem, updateMenuItem, deleteMenuItem } = useMenu();
   const { categories } = useCategories();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings' | 'pos'>('dashboard');
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -232,7 +233,7 @@ const AdminDashboard: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'ClickEats@Admin!2025') {
+    if (password === 'Pet@Admin!2025') {
       setIsAuthenticated(true);
       localStorage.setItem('beracah_admin_auth', 'true');
       setLoginError('');
@@ -898,6 +899,48 @@ const AdminDashboard: React.FC = () => {
     return <PaymentMethodManager onBack={() => setCurrentView('dashboard')} />;
   }
 
+  // POS View
+  if (currentView === 'pos') {
+    return (
+      <div className="min-h-screen bg-pet-cream">
+        <div className="bg-white shadow-sm border-b-4 border-pet-orange">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => setCurrentView('dashboard')}
+                  className="flex items-center space-x-2 text-pet-orange hover:text-pet-orange-dark transition-colors duration-200"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                  <span>Dashboard</span>
+                </button>
+                <h1 className="text-2xl font-display font-bold text-pet-orange-dark">POS System</h1>
+              </div>
+              <div className="flex items-center space-x-4">
+                <a
+                  href="/"
+                  className="text-gray-600 hover:text-black transition-colors duration-200"
+                >
+                  View Website
+                </a>
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-600 hover:text-black transition-colors duration-200"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <POSDashboard />
+        </div>
+      </div>
+    );
+  }
+
   // Site Settings View
   if (currentView === 'settings') {
     return (
@@ -934,7 +977,7 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <Coffee className="h-8 w-8 text-black" />
-              <h1 className="text-2xl font-noto font-semibold text-black">ClickEats Admin</h1>
+              <h1 className="text-2xl font-noto font-semibold text-black">For Your Pets Only Admin</h1>
             </div>
             <div className="flex items-center space-x-4">
               <a
@@ -1045,6 +1088,13 @@ const AdminDashboard: React.FC = () => {
               >
                 <Settings className="h-5 w-5 text-gray-400" />
                 <span className="font-medium text-gray-900">Site Settings</span>
+              </button>
+              <button
+                onClick={() => setCurrentView('pos')}
+                className="w-full flex items-center space-x-3 p-3 text-left hover:bg-pet-orange-dark/10 rounded-lg transition-colors duration-200 border-2 border-pet-orange"
+              >
+                <BarChart3 className="h-5 w-5 text-pet-orange" />
+                <span className="font-medium text-pet-orange-dark">🎯 POS System</span>
               </button>
             </div>
           </div>

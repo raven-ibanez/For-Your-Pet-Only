@@ -12,11 +12,11 @@ const FloatingCartButton: React.FC<FloatingCartButtonProps> = ({ itemCount, onCa
   return (
     <button
       onClick={onCartClick}
-      className="fixed bottom-6 right-6 bg-red-600 text-white p-4 rounded-full shadow-lg hover:bg-red-700 transition-all duration-200 transform hover:scale-110 z-40 md:hidden"
+      className="fixed bottom-6 right-6 bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white p-4 rounded-full shadow-2xl hover:shadow-pet-orange/50 transition-all duration-200 transform hover:scale-110 z-40 md:hidden border-2 border-white"
     >
       <div className="relative">
         <ShoppingCart className="h-6 w-6" />
-        <span className="absolute -top-2 -right-2 bg-yellow-400 text-black text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+        <span className="absolute -top-2 -right-2 bg-white text-pet-orange-dark text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold border-2 border-pet-orange-dark animate-bounce-gentle">
           {itemCount}
         </span>
       </div>

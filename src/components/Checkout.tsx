@@ -60,7 +60,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
       : '';
     
     const orderDetails = `
-🛒 ClickEats ORDER
+🛒 For Your Pets Only ORDER
 
 👤 Customer: ${customerName}
 📞 Contact: ${contactNumber}
@@ -95,11 +95,11 @@ ${serviceType === 'delivery' ? `🛵 DELIVERY FEE:` : ''}
 
 ${notes ? `📝 Notes: ${notes}` : ''}
 
-Please confirm this order to proceed. Thank you for choosing ClickEats! 🥟
+Please confirm this order to proceed. Thank you for choosing For Your Pets Only! 🥟
     `.trim();
 
     const encodedMessage = encodeURIComponent(orderDetails);
-    const messengerUrl = `https://m.me/61579693577478?text=${encodedMessage}`;
+    const messengerUrl = `https://m.me/100310379306836?text=${encodedMessage}`;
     
     window.open(messengerUrl, '_blank');
     
@@ -116,24 +116,24 @@ Please confirm this order to proceed. Thank you for choosing ClickEats! 🥟
         <div className="flex items-center mb-8">
           <button
             onClick={onBack}
-            className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
+            className="flex items-center space-x-2 text-pet-orange hover:text-pet-orange-dark transition-colors duration-200 font-semibold"
           >
             <ArrowLeft className="h-5 w-5" />
             <span>Back to Cart</span>
           </button>
-          <h1 className="text-3xl font-noto font-semibold text-black ml-8">Order Details</h1>
+          <h1 className="text-3xl font-display font-bold text-pet-orange-dark ml-8">📦 Order Details</h1>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Order Summary */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-2xl font-noto font-medium text-black mb-6">Order Summary</h2>
+          <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-pet-orange">
+            <h2 className="text-2xl font-display font-bold text-pet-orange-dark mb-6">📋 Order Summary</h2>
             
             <div className="space-y-4 mb-6">
               {cartItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between py-2 border-b border-red-100">
+                <div key={item.id} className="flex items-center justify-between py-2 border-b-2 border-pet-beige">
                   <div>
-                    <h4 className="font-medium text-black">{item.name}</h4>
+                    <h4 className="font-semibold text-pet-brown">{item.name}</h4>
                     {item.selectedVariation && (
                       <p className="text-sm text-gray-600">Size: {item.selectedVariation.name}</p>
                     )}
@@ -144,44 +144,44 @@ Please confirm this order to proceed. Thank you for choosing ClickEats! 🥟
                     )}
                     <p className="text-sm text-gray-600">₱{item.totalPrice} x {item.quantity}</p>
                   </div>
-                  <span className="font-semibold text-black">₱{item.totalPrice * item.quantity}</span>
+                  <span className="font-bold text-pet-orange-dark">₱{item.totalPrice * item.quantity}</span>
                 </div>
               ))}
             </div>
             
-            <div className="border-t border-red-200 pt-4">
-              <div className="flex items-center justify-between text-2xl font-noto font-semibold text-black">
+            <div className="border-t-2 border-pet-orange pt-4">
+              <div className="flex items-center justify-between text-2xl font-display font-bold text-pet-brown">
                 <span>Total:</span>
-                <span>₱{totalPrice}</span>
+                <span className="text-pet-orange-dark">₱{totalPrice}</span>
               </div>
             </div>
           </div>
 
           {/* Customer Details Form */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-2xl font-noto font-medium text-black mb-6">Customer Information</h2>
+          <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-pet-orange">
+            <h2 className="text-2xl font-display font-bold text-pet-orange-dark mb-6">👤 Customer Information</h2>
             
             <form className="space-y-6">
               {/* Customer Information */}
               <div>
-                <label className="block text-sm font-medium text-black mb-2">Full Name *</label>
+                <label className="block text-sm font-semibold text-pet-brown mb-2">Full Name *</label>
                 <input
                   type="text"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full px-4 py-3 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
+                  className="w-full px-4 py-3 border-2 border-pet-orange rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange-dark transition-all duration-200"
                   placeholder="Enter your full name"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-black mb-2">Contact Number *</label>
+                <label className="block text-sm font-semibold text-pet-brown mb-2">Contact Number *</label>
                 <input
                   type="tel"
                   value={contactNumber}
                   onChange={(e) => setContactNumber(e.target.value)}
-                  className="w-full px-4 py-3 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
+                  className="w-full px-4 py-3 border-2 border-pet-orange rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange-dark transition-all duration-200"
                   placeholder="09XX XXX XXXX"
                   required
                 />
@@ -189,7 +189,7 @@ Please confirm this order to proceed. Thank you for choosing ClickEats! 🥟
 
               {/* Service Type */}
               <div>
-                <label className="block text-sm font-medium text-black mb-3">Service Type *</label>
+                <label className="block text-sm font-semibold text-pet-brown mb-3">Service Type *</label>
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { value: 'dine-in', label: 'Dine In', icon: '🪑' },
@@ -200,14 +200,14 @@ Please confirm this order to proceed. Thank you for choosing ClickEats! 🥟
                       key={option.value}
                       type="button"
                       onClick={() => setServiceType(option.value as ServiceType)}
-                      className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                      className={`p-4 rounded-lg border-2 transition-all duration-200 font-semibold ${
                         serviceType === option.value
-                          ? 'border-red-600 bg-red-600 text-white'
-                          : 'border-red-300 bg-white text-gray-700 hover:border-red-400'
+                          ? 'border-pet-orange bg-pet-orange text-white shadow-lg'
+                          : 'border-pet-orange bg-white text-pet-brown hover:bg-pet-beige'
                       }`}
                     >
                       <div className="text-2xl mb-1">{option.icon}</div>
-                      <div className="text-sm font-medium">{option.label}</div>
+                      <div className="text-sm">{option.label}</div>
                     </button>
                   ))}
                 </div>

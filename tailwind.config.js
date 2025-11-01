@@ -4,21 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        ramen: {
-          red: '#D7263D',
-          dark: '#0B0A0A',
-          charcoal: '#111113',
-          cream: '#FFF3E0',
-          beige: '#F7E7CE',
-          gold: '#E0A106',
-          sesame: '#D1C7B7',
-          seaweed: '#1F2937',
-          kimchi: '#B81D24'
+        pet: {
+          orange: '#FF8C42',
+          'orange-dark': '#F37021',
+          'orange-light': '#FFB380',
+          white: '#FFFFFF',
+          cream: '#FFF8F0',
+          beige: '#FFEBD4',
+          brown: '#8B4513',
+          'gray-light': '#F5F5F5',
+          'gray-medium': '#9CA3AF',
+          'gray-dark': '#374151'
         }
       },
       fontFamily: {
-        'pretendard': ['Pretendard', 'system-ui', 'sans-serif'],
-        'noto-kr': ['Noto Serif KR', 'serif']
+        'sans': ['Inter', 'system-ui', 'sans-serif'],
+        'display': ['Poppins', 'system-ui', 'sans-serif']
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',

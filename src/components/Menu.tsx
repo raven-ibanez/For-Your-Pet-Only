@@ -93,10 +93,10 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
       />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="text-center mb-12">
-        <h2 className="text-4xl font-noto font-semibold text-black mb-4">Our Menu</h2>
-        <p className="text-gray-600 max-w-2xl mx-auto">
-          Discover our selection of authentic dim sum, flavorful noodles, and traditional Asian dishes, 
-          all prepared with fresh ingredients and authentic techniques.
+        <h2 className="text-4xl font-display font-bold text-pet-orange-dark mb-4">Our Products 🐾</h2>
+        <p className="text-pet-gray-dark text-lg max-w-2xl mx-auto">
+          Browse our carefully curated selection of premium pet supplies, toys, treats, and essentials 
+          to keep your furry friends happy and healthy!
         </p>
       </div>
 
@@ -107,9 +107,9 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
         
         return (
           <section key={category.id} id={category.id} className="mb-16">
-            <div className="flex items-center mb-8">
-              <span className="text-3xl mr-3">{category.icon}</span>
-              <h3 className="text-3xl font-noto font-medium text-black">{category.name}</h3>
+            <div className="flex items-center mb-8 pb-4 border-b-2 border-pet-orange">
+              <span className="text-4xl mr-3">{category.icon}</span>
+              <h3 className="text-3xl font-display font-bold text-pet-orange-dark">{category.name}</h3>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
