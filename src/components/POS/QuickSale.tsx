@@ -19,6 +19,7 @@ const QuickSale: React.FC = () => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [amountPaid, setAmountPaid] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastOrderNumber, setLastOrderNumber] = useState('');
@@ -36,6 +37,23 @@ const QuickSale: React.FC = () => {
 
 
   const addToCart = (product: any) => {
+    // Check stock availability
+    if (product.isTracked && product.currentStock !== undefined) {
+      if (product.currentStock <= 0) {
+        alert(`Sorry, ${product.name} is out of stock.`);
+        return;
+      }
+      
+      const existingItem = cart.find(item => item.id === product.id);
+      const currentQuantity = existingItem ? existingItem.quantity : 0;
+      const newQuantity = currentQuantity + 1;
+      
+      if (newQuantity > product.currentStock) {
+        alert(`Sorry, only ${product.currentStock} ${product.currentStock === 1 ? 'piece' : 'pieces'} available for ${product.name}.`);
+        return;
+      }
+    }
+    
     const existingItem = cart.find(item => item.id === product.id);
     
     if (existingItem) {
@@ -59,6 +77,22 @@ const QuickSale: React.FC = () => {
     setCart(cart.map(item => {
       if (item.id === id) {
         const newQuantity = Math.max(1, item.quantity + change);
+        
+        // Check stock availability when increasing quantity
+        if (change > 0) {
+          const product = menuItems.find(p => p.id === id);
+          if (product?.isTracked && product.currentStock !== undefined) {
+            if (product.currentStock <= 0) {
+              alert(`Sorry, ${product.name} is out of stock.`);
+              return item;
+            }
+            if (newQuantity > product.currentStock) {
+              alert(`Sorry, only ${product.currentStock} ${product.currentStock === 1 ? 'piece' : 'pieces'} available for ${product.name}.`);
+              return item;
+            }
+          }
+        }
+        
         return { ...item, quantity: newQuantity, total: newQuantity * item.price };
       }
       return item;
@@ -73,6 +107,19 @@ const QuickSale: React.FC = () => {
     return cart.reduce((sum, item) => sum + item.total, 0);
   };
 
+  const calculateChange = () => {
+    if (paymentMethod !== 'cash' || !amountPaid) return 0;
+    const paid = parseFloat(amountPaid) || 0;
+    const total = calculateTotal();
+    return Math.max(0, paid - total);
+  };
+
+  const isAmountSufficient = () => {
+    if (paymentMethod !== 'cash') return true;
+    const paid = parseFloat(amountPaid) || 0;
+    return paid >= calculateTotal();
+  };
+
   const handleCompleteSale = async () => {
     if (cart.length === 0) {
       alert('Please add items to cart');
@@ -81,6 +128,11 @@ const QuickSale: React.FC = () => {
 
     if (!customerName.trim()) {
       alert('Please enter customer name');
+      return;
+    }
+
+    if (paymentMethod === 'cash' && !isAmountSufficient()) {
+      alert(`Insufficient payment. Total is ₱${calculateTotal().toFixed(2)} but only ₱${parseFloat(amountPaid || '0').toFixed(2)} was paid.`);
       return;
     }
 
@@ -179,6 +231,7 @@ const QuickSale: React.FC = () => {
       setCustomerName('');
       setCustomerPhone('');
       setPaymentMethod('cash');
+      setAmountPaid('');
 
       // Hide success message after 5 seconds
       setTimeout(() => setShowSuccess(false), 5000);
@@ -380,18 +433,68 @@ const QuickSale: React.FC = () => {
           </div>
 
           {/* Payment Method */}
-          <div>
-            <label className="block text-xs font-semibold text-pet-brown mb-2 uppercase">Payment Method</label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base"
-            >
-              <option value="cash">💵 Cash</option>
-              <option value="card">💳 Card</option>
-              <option value="gcash">📱 GCash</option>
-              <option value="maya">📱 Maya</option>
-            </select>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-pet-brown mb-2 uppercase">Payment Method</label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => {
+                  setPaymentMethod(e.target.value);
+                  if (e.target.value !== 'cash') {
+                    setAmountPaid('');
+                  }
+                }}
+                className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base"
+              >
+                <option value="cash">💵 Cash</option>
+                <option value="card">💳 Card</option>
+                <option value="gcash">📱 GCash</option>
+                <option value="maya">📱 Maya</option>
+              </select>
+            </div>
+
+            {/* Cash Payment - Amount Paid & Change */}
+            {paymentMethod === 'cash' && (
+              <div className="space-y-2 bg-pet-cream p-3 rounded-lg border-2 border-pet-orange">
+                <div>
+                  <label className="block text-xs font-semibold text-pet-brown mb-1">Amount Paid *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base font-semibold"
+                  />
+                </div>
+                {amountPaid && parseFloat(amountPaid) > 0 && (
+                  <div className="pt-2 border-t border-pet-orange/30">
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-pet-gray-medium">Total:</span>
+                      <span className="font-semibold text-pet-brown">₱{calculateTotal().toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-pet-gray-medium">Paid:</span>
+                      <span className="font-semibold text-pet-brown">₱{parseFloat(amountPaid || '0').toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-base font-bold pt-2 border-t border-pet-orange/30">
+                      <span className={calculateChange() >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        Change:
+                      </span>
+                      <span className={calculateChange() >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        ₱{calculateChange().toFixed(2)}
+                      </span>
+                    </div>
+                    {!isAmountSufficient() && (
+                      <p className="text-xs text-red-600 mt-1 font-semibold">
+                        ⚠️ Insufficient payment
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -413,7 +516,7 @@ const QuickSale: React.FC = () => {
           <div className="space-y-2">
             <button
               onClick={handleCompleteSale}
-              disabled={isProcessing || cart.length === 0}
+              disabled={isProcessing || cart.length === 0 || (paymentMethod === 'cash' && !isAmountSufficient())}
               className="w-full bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white py-3 lg:py-4 rounded-lg font-bold text-base lg:text-lg hover:from-pet-orange-dark hover:to-pet-orange transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
               {isProcessing ? (
@@ -422,11 +525,14 @@ const QuickSale: React.FC = () => {
                   <span>Processing...</span>
                 </span>
               ) : (
-                `Complete Sale - ₱${calculateTotal().toFixed(2)}`
+                `Complete Sale - ₱${calculateTotal().toFixed(2)}${paymentMethod === 'cash' && calculateChange() > 0 ? ` (Change: ₱${calculateChange().toFixed(2)})` : ''}`
               )}
             </button>
             <button
-              onClick={() => setCart([])}
+              onClick={() => {
+                setCart([]);
+                setAmountPaid('');
+              }}
               disabled={cart.length === 0}
               className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:opacity-50 text-sm lg:text-base"
             >

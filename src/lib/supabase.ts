@@ -198,6 +198,41 @@ export type Database = {
           updated_at?: string;
         };
       };
+      announcements: {
+        Row: {
+          id: string;
+          title: string;
+          message: string;
+          type: 'info' | 'warning' | 'success' | 'error';
+          active: boolean;
+          start_date: string | null;
+          end_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          message: string;
+          type?: 'info' | 'warning' | 'success' | 'error';
+          active?: boolean;
+          start_date?: string | null;
+          end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          message?: string;
+          type?: 'info' | 'warning' | 'success' | 'error';
+          active?: boolean;
+          start_date?: string | null;
+          end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 };

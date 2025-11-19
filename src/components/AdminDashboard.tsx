@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3 } from 'lucide-react';
-import { MenuItem, Variation, AddOn } from '../types';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3, Megaphone } from 'lucide-react';
+import { MenuItem, Variation, AddOn, Announcement } from '../types';
 import { addOnCategories } from '../data/menuData';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
+import { useAnnouncements } from '../hooks/useAnnouncements';
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
 import PaymentMethodManager from './PaymentMethodManager';
@@ -18,11 +19,21 @@ const AdminDashboard: React.FC = () => {
   const [loginError, setLoginError] = useState('');
   const { menuItems, loading, addMenuItem, updateMenuItem, deleteMenuItem } = useMenu();
   const { categories } = useCategories();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings' | 'pos'>('dashboard');
+  const { announcements, loading: announcementsLoading, addAnnouncement, updateAnnouncement, deleteAnnouncement } = useAnnouncements();
+  const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings' | 'pos' | 'announcements' | 'announcements-add' | 'announcements-edit'>('dashboard');
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [announcementFormData, setAnnouncementFormData] = useState<Partial<Announcement>>({
+    title: '',
+    message: '',
+    type: 'info',
+    active: true,
+    start_date: '',
+    end_date: ''
+  });
   const [formData, setFormData] = useState<Partial<MenuItem>>({
     name: '',
     description: '',
@@ -88,9 +99,92 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleCancel = () => {
-    setCurrentView(currentView === 'add' || currentView === 'edit' ? 'items' : 'dashboard');
-    setEditingItem(null);
+    if (currentView === 'add' || currentView === 'edit') {
+      setCurrentView('items');
+      setEditingItem(null);
+    } else if (currentView === 'announcements-add' || currentView === 'announcements-edit') {
+      setCurrentView('announcements');
+      setEditingAnnouncement(null);
+      setAnnouncementFormData({
+        title: '',
+        message: '',
+        type: 'info',
+        active: true,
+        start_date: '',
+        end_date: ''
+      });
+    } else {
+      setCurrentView('dashboard');
+    }
     setSelectedItems([]);
+  };
+
+  const handleAddAnnouncement = () => {
+    setCurrentView('announcements-add');
+    setAnnouncementFormData({
+      title: '',
+      message: '',
+      type: 'info',
+      active: true,
+      start_date: '',
+      end_date: ''
+    });
+  };
+
+  const handleEditAnnouncement = (announcement: Announcement) => {
+    setEditingAnnouncement(announcement);
+    setAnnouncementFormData({
+      title: announcement.title,
+      message: announcement.message,
+      type: announcement.type,
+      active: announcement.active,
+      start_date: announcement.start_date || '',
+      end_date: announcement.end_date || ''
+    });
+    setCurrentView('announcements-edit');
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (confirm('Are you sure you want to delete this announcement? This action cannot be undone.')) {
+      try {
+        setIsProcessing(true);
+        await deleteAnnouncement(id);
+      } catch (error) {
+        alert('Failed to delete announcement. Please try again.');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const handleSaveAnnouncement = async () => {
+    if (!announcementFormData.title || !announcementFormData.message) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      if (editingAnnouncement) {
+        await updateAnnouncement(editingAnnouncement.id, announcementFormData);
+      } else {
+        await addAnnouncement(announcementFormData as Omit<Announcement, 'id' | 'created_at' | 'updated_at'>);
+      }
+      setCurrentView('announcements');
+      setEditingAnnouncement(null);
+      setAnnouncementFormData({
+        title: '',
+        message: '',
+        type: 'info',
+        active: true,
+        start_date: '',
+        end_date: ''
+      });
+    } catch (error) {
+      alert('Failed to save announcement');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleBulkRemove = async () => {
@@ -969,6 +1063,257 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
+  // Announcements List View
+  if (currentView === 'announcements') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => setCurrentView('dashboard')}
+                  className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                  <span>Dashboard</span>
+                </button>
+                <h1 className="text-2xl font-playfair font-semibold text-black">Announcements</h1>
+              </div>
+              <button
+                onClick={handleAddAnnouncement}
+                className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors duration-200"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add New Announcement</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          {announcementsLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading announcements...</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              {announcements.length === 0 ? (
+                <div className="text-center py-12">
+                  <Megaphone className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No announcements yet</p>
+                  <button
+                    onClick={handleAddAnnouncement}
+                    className="mt-4 text-green-600 hover:text-green-700 font-medium"
+                  >
+                    Create your first announcement
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {announcements.map((announcement) => {
+                    const getTypeColor = () => {
+                      switch (announcement.type) {
+                        case 'success':
+                          return 'bg-green-100 text-green-800';
+                        case 'warning':
+                          return 'bg-yellow-100 text-yellow-800';
+                        case 'error':
+                          return 'bg-red-100 text-red-800';
+                        default:
+                          return 'bg-blue-100 text-blue-800';
+                      }
+                    };
+
+                    const now = new Date();
+                    const startDate = announcement.start_date ? new Date(announcement.start_date) : null;
+                    const endDate = announcement.end_date ? new Date(announcement.end_date) : null;
+                    const isActive = announcement.active &&
+                      (!startDate || now >= startDate) &&
+                      (!endDate || now <= endDate);
+
+                    return (
+                      <div key={announcement.id} className="p-6 hover:bg-gray-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <h3 className="text-lg font-medium text-gray-900">{announcement.title}</h3>
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getTypeColor()}`}>
+                                {announcement.type}
+                              </span>
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                isActive
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-3 whitespace-pre-line">{announcement.message}</p>
+                            <div className="flex items-center space-x-4 text-xs text-gray-500">
+                              {startDate && (
+                                <span>Start: {new Date(startDate).toLocaleDateString()}</span>
+                              )}
+                              {endDate && (
+                                <span>End: {new Date(endDate).toLocaleDateString()}</span>
+                              )}
+                              {!startDate && !endDate && (
+                                <span>No date restrictions</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2 ml-4">
+                            <button
+                              onClick={() => handleEditAnnouncement(announcement)}
+                              disabled={isProcessing}
+                              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors duration-200"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAnnouncement(announcement.id)}
+                              disabled={isProcessing}
+                              className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Announcement Form View (Add/Edit)
+  if (currentView === 'announcements-add' || currentView === 'announcements-edit') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={handleCancel}
+                  className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                  <span>Back</span>
+                </button>
+                <h1 className="text-2xl font-playfair font-semibold text-black">
+                  {currentView === 'announcements-add' ? 'Add New Announcement' : 'Edit Announcement'}
+                </h1>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancel}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-2"
+                >
+                  <X className="h-4 w-4" />
+                  <span>Cancel</span>
+                </button>
+                <button
+                  onClick={handleSaveAnnouncement}
+                  disabled={isProcessing}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{isProcessing ? 'Saving...' : 'Save'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-xl shadow-sm p-8">
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">Title *</label>
+                <input
+                  type="text"
+                  value={announcementFormData.title || ''}
+                  onChange={(e) => setAnnouncementFormData({ ...announcementFormData, title: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  placeholder="Enter announcement title"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">Message *</label>
+                <textarea
+                  value={announcementFormData.message || ''}
+                  onChange={(e) => setAnnouncementFormData({ ...announcementFormData, message: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  placeholder="Enter announcement message"
+                  rows={5}
+                />
+                <p className="text-sm text-gray-500 mt-1">You can use line breaks for formatting</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">Type</label>
+                <select
+                  value={announcementFormData.type || 'info'}
+                  onChange={(e) => setAnnouncementFormData({ ...announcementFormData, type: e.target.value as Announcement['type'] })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                >
+                  <option value="info">Info</option>
+                  <option value="success">Success</option>
+                  <option value="warning">Warning</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
+
+              <div className="flex items-center">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={announcementFormData.active ?? true}
+                    onChange={(e) => setAnnouncementFormData({ ...announcementFormData, active: e.target.checked })}
+                    className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                  />
+                  <span className="text-sm font-medium text-black">Active</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">Start Date (Optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={announcementFormData.start_date || ''}
+                    onChange={(e) => setAnnouncementFormData({ ...announcementFormData, start_date: e.target.value || undefined })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">Leave empty for immediate start</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">End Date (Optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={announcementFormData.end_date || ''}
+                    onChange={(e) => setAnnouncementFormData({ ...announcementFormData, end_date: e.target.value || undefined })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">Leave empty for no end date</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Dashboard View
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1088,6 +1433,13 @@ const AdminDashboard: React.FC = () => {
               >
                 <Settings className="h-5 w-5 text-gray-400" />
                 <span className="font-medium text-gray-900">Site Settings</span>
+              </button>
+              <button
+                onClick={() => setCurrentView('announcements')}
+                className="w-full flex items-center space-x-3 p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
+              >
+                <Megaphone className="h-5 w-5 text-gray-400" />
+                <span className="font-medium text-gray-900">Announcements</span>
               </button>
               <button
                 onClick={() => setCurrentView('pos')}

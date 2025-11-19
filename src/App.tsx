@@ -8,11 +8,15 @@ import Cart from './components/Cart';
 import Checkout from './components/Checkout';
 import FloatingCartButton from './components/FloatingCartButton';
 import AdminDashboard from './components/AdminDashboard';
+import StaffDashboard from './components/StaffDashboard';
 import { useMenu } from './hooks/useMenu';
+import { useAnnouncements } from './hooks/useAnnouncements';
+import { AnnouncementsList } from './components/Announcement';
 
 function MainApp() {
   const cart = useCart();
   const { menuItems } = useMenu();
+  const { activeAnnouncements } = useAnnouncements();
   const [currentView, setCurrentView] = React.useState<'menu' | 'cart' | 'checkout'>('menu');
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
 
@@ -36,6 +40,9 @@ function MainApp() {
         onCartClick={() => handleViewChange('cart')}
         onMenuClick={() => handleViewChange('menu')}
       />
+      {currentView === 'menu' && activeAnnouncements.length > 0 && (
+        <AnnouncementsList announcements={activeAnnouncements} />
+      )}
       <SubNav selectedCategory={selectedCategory} onCategoryClick={handleCategoryClick} />
       
       {currentView === 'menu' && (
@@ -83,6 +90,7 @@ function App() {
       <Routes>
         <Route path="/" element={<MainApp />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/staff" element={<StaffDashboard />} />
       </Routes>
     </Router>
   );

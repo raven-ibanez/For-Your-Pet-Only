@@ -96,7 +96,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
         <h2 className="text-4xl font-display font-bold text-pet-orange-dark mb-4">Our Products 🐾</h2>
         <p className="text-pet-gray-dark text-lg max-w-2xl mx-auto">
           Browse our carefully curated selection of premium pet supplies, toys, treats, and essentials 
-          to keep your furry friends happy and healthy!
+          to keep your furbabies happy and healthy!
         </p>
       </div>
 

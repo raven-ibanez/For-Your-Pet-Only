@@ -11,13 +11,18 @@ export const useMenu = () => {
     try {
       setLoading(true);
       
-      // Fetch menu items with their variations and add-ons
+      // Fetch menu items with their variations, add-ons, and inventory
       const { data: items, error: itemsError } = await supabase
         .from('menu_items')
         .select(`
           *,
           variations (*),
-          add_ons (*)
+          add_ons (*),
+          inventory (
+            current_stock,
+            is_tracked,
+            is_out_of_stock
+          )
         `)
         .order('created_at', { ascending: true });
 
@@ -36,6 +41,16 @@ export const useMenu = () => {
         // Calculate effective price
         const effectivePrice = isDiscountActive && item.discount_price ? item.discount_price : item.base_price;
 
+        // Get inventory data (can be array or single object)
+        const inventory = Array.isArray(item.inventory) 
+          ? item.inventory[0] 
+          : item.inventory;
+
+        // Determine availability: if tracked and out of stock, mark as unavailable
+        const isOutOfStock = inventory?.is_tracked && (inventory?.is_out_of_stock || (inventory?.current_stock ?? 0) <= 0);
+        const available = item.available ?? true;
+        const finalAvailable = isOutOfStock ? false : available;
+
         return {
           id: item.id,
           name: item.name,
@@ -43,7 +58,7 @@ export const useMenu = () => {
           basePrice: item.base_price,
           category: item.category,
           popular: item.popular,
-          available: item.available ?? true,
+          available: finalAvailable,
           image: item.image_url || undefined,
           discountPrice: item.discount_price || undefined,
           discountStartDate: item.discount_start_date || undefined,
@@ -61,7 +76,11 @@ export const useMenu = () => {
             name: a.name,
             price: a.price,
             category: a.category
-          })) || []
+          })) || [],
+          // Stock information
+          currentStock: inventory?.current_stock ?? undefined,
+          isTracked: inventory?.is_tracked ?? false,
+          isOutOfStock: inventory?.is_out_of_stock ?? false
         };
       }) || [];
 

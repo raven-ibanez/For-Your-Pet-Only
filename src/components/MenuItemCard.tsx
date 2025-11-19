@@ -16,12 +16,16 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   onUpdateQuantity 
 }) => {
   const [showCustomization, setShowCustomization] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [showQuantityModal, setShowQuantityModal] = useState(false);
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [selectedVariation, setSelectedVariation] = useState<Variation | undefined>(
     item.variations?.[0]
   );
   const [selectedAddOns, setSelectedAddOns] = useState<(AddOn & { quantity: number })[]>([]);
+  const [customizationQuantity, setCustomizationQuantity] = useState(1);
 
-  const calculatePrice = () => {
+  const calculatePrice = (qty: number = customizationQuantity) => {
     // Use effective price (discounted or regular) as base
     let price = item.effectivePrice || item.basePrice;
     if (selectedVariation) {
@@ -30,28 +34,73 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     selectedAddOns.forEach(addOn => {
       price += addOn.price * addOn.quantity;
     });
-    return price;
+    return price * qty;
   };
 
   const handleAddToCart = () => {
     if (item.variations?.length || item.addOns?.length) {
       setShowCustomization(true);
     } else {
-      onAddToCart(item, 1);
+      setShowQuantityModal(true);
+      setSelectedQuantity(1);
     }
   };
 
+  const handleQuantityAddToCart = () => {
+    // Check stock availability
+    if (item.isTracked && item.currentStock !== undefined) {
+      if (item.currentStock <= 0) {
+        alert(`Sorry, ${item.name} is out of stock.`);
+        return;
+      }
+      if (selectedQuantity > item.currentStock) {
+        alert(`Sorry, only ${item.currentStock} ${item.currentStock === 1 ? 'piece' : 'pieces'} available for ${item.name}.`);
+        return;
+      }
+    }
+    onAddToCart(item, selectedQuantity);
+    setShowQuantityModal(false);
+    setSelectedQuantity(1);
+  };
+
   const handleCustomizedAddToCart = () => {
+    // Check stock availability
+    if (item.isTracked && item.currentStock !== undefined) {
+      if (item.currentStock <= 0) {
+        alert(`Sorry, ${item.name} is out of stock.`);
+        return;
+      }
+      if (customizationQuantity > item.currentStock) {
+        alert(`Sorry, only ${item.currentStock} ${item.currentStock === 1 ? 'piece' : 'pieces'} available for ${item.name}.`);
+        return;
+      }
+    }
     // Convert selectedAddOns back to regular AddOn array for cart
     const addOnsForCart: AddOn[] = selectedAddOns.flatMap(addOn => 
       Array(addOn.quantity).fill({ ...addOn, quantity: undefined })
     );
-    onAddToCart(item, 1, selectedVariation, addOnsForCart);
+    // Add multiple items based on customizationQuantity
+    for (let i = 0; i < customizationQuantity; i++) {
+      onAddToCart(item, 1, selectedVariation, addOnsForCart);
+    }
     setShowCustomization(false);
     setSelectedAddOns([]);
+    setCustomizationQuantity(1);
   };
 
   const handleIncrement = () => {
+    // Check stock availability before incrementing
+    if (item.isTracked && item.currentStock !== undefined) {
+      const newQuantity = quantity + 1;
+      if (item.currentStock <= 0) {
+        alert(`Sorry, ${item.name} is out of stock.`);
+        return;
+      }
+      if (newQuantity > item.currentStock) {
+        alert(`Sorry, only ${item.currentStock} ${item.currentStock === 1 ? 'piece' : 'pieces'} available for ${item.name}.`);
+        return;
+      }
+    }
     onUpdateQuantity(item.id, quantity + 1);
   };
 
@@ -100,9 +149,10 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
             <img
               src={item.image}
               alt={item.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105 cursor-pointer"
               loading="lazy"
               decoding="async"
+              onClick={() => setShowImageModal(true)}
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.nextElementSibling?.classList.remove('hidden');
@@ -130,6 +180,11 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           {!item.available && (
             <div className="absolute top-3 right-3 bg-pet-gray-dark text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
               OUT OF STOCK
+            </div>
+          )}
+          {item.available && item.isTracked && item.currentStock !== undefined && item.currentStock > 0 && item.currentStock <= 1 && (
+            <div className="absolute top-3 right-3 bg-yellow-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
+              ONLY {item.currentStock} LEFT
             </div>
           )}
           
@@ -351,11 +406,56 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                 </div>
               )}
 
+              {/* Quantity Selection */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-900 mb-4">Quantity</h4>
+                <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl bg-gray-50">
+                  <span className="font-medium text-gray-900">Quantity:</span>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setCustomizationQuantity(Math.max(1, customizationQuantity - 1))}
+                      className="p-2 hover:bg-pet-orange hover:text-white rounded-lg transition-colors duration-200 border-2 border-pet-orange"
+                    >
+                      <Minus className="h-4 w-4 text-pet-orange-dark" />
+                    </button>
+                    <span className="font-bold text-pet-brown min-w-[40px] text-center text-lg">
+                      {customizationQuantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.isTracked && item.currentStock !== undefined) {
+                          if (item.currentStock <= 0) {
+                            alert(`Sorry, ${item.name} is out of stock.`);
+                            return;
+                          }
+                          if (customizationQuantity + 1 > item.currentStock) {
+                            alert(`Sorry, only ${item.currentStock} ${item.currentStock === 1 ? 'piece' : 'pieces'} available.`);
+                            return;
+                          }
+                        }
+                        setCustomizationQuantity(customizationQuantity + 1);
+                      }}
+                      className="p-2 hover:bg-pet-orange hover:text-white rounded-lg transition-colors duration-200 border-2 border-pet-orange"
+                    >
+                      <Plus className="h-4 w-4 text-pet-orange-dark" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Price Summary */}
               <div className="border-t-2 border-pet-orange pt-4 mb-6">
-                <div className="flex items-center justify-between text-2xl font-bold text-gray-900">
-                  <span>Total:</span>
-                  <span className="text-pet-orange-dark">₱{calculatePrice().toFixed(2)}</span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-lg text-gray-600">
+                    <span>Price per item:</span>
+                    <span>₱{calculatePrice(1).toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-2xl font-bold text-gray-900">
+                    <span>Total:</span>
+                    <span className="text-pet-orange-dark">₱{calculatePrice().toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -364,9 +464,120 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                 className="w-full bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white py-4 rounded-xl hover:from-pet-orange-dark hover:to-pet-orange transition-all duration-200 font-semibold flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 <ShoppingCart className="h-5 w-5" />
-                <span>Add to Cart - ₱{calculatePrice().toFixed(2)}</span>
+                <span>Add {customizationQuantity} to Cart - ₱{calculatePrice().toFixed(2)}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quantity Selection Modal */}
+      {showQuantityModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+            <div className="border-b border-gray-200 p-6 flex items-center justify-between rounded-t-2xl">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">Select Quantity</h3>
+                <p className="text-sm text-gray-500 mt-1">{item.name}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowQuantityModal(false);
+                  setSelectedQuantity(1);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Quantity Selector */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between p-6 border-2 border-pet-orange rounded-xl bg-pet-beige">
+                  <span className="font-semibold text-gray-900 text-lg">Quantity:</span>
+                  <div className="flex items-center space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedQuantity(Math.max(1, selectedQuantity - 1))}
+                      className="p-3 hover:bg-pet-orange hover:text-white rounded-lg transition-colors duration-200 border-2 border-pet-orange bg-white"
+                    >
+                      <Minus className="h-5 w-5 text-pet-orange-dark" />
+                    </button>
+                    <span className="font-bold text-pet-brown min-w-[50px] text-center text-2xl">
+                      {selectedQuantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.isTracked && item.currentStock !== undefined) {
+                          if (item.currentStock <= 0) {
+                            alert(`Sorry, ${item.name} is out of stock.`);
+                            return;
+                          }
+                          if (selectedQuantity + 1 > item.currentStock) {
+                            alert(`Sorry, only ${item.currentStock} ${item.currentStock === 1 ? 'piece' : 'pieces'} available.`);
+                            return;
+                          }
+                        }
+                        setSelectedQuantity(selectedQuantity + 1);
+                      }}
+                      className="p-3 hover:bg-pet-orange hover:text-white rounded-lg transition-colors duration-200 border-2 border-pet-orange bg-white"
+                    >
+                      <Plus className="h-5 w-5 text-pet-orange-dark" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Price Summary */}
+              <div className="border-t-2 border-pet-orange pt-4 mb-6">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-lg text-gray-600">
+                    <span>Price per item:</span>
+                    <span>₱{(item.effectivePrice || item.basePrice).toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-2xl font-bold text-gray-900">
+                    <span>Total:</span>
+                    <span className="text-pet-orange-dark">
+                      ₱{((item.effectivePrice || item.basePrice) * selectedQuantity).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleQuantityAddToCart}
+                className="w-full bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white py-4 rounded-xl hover:from-pet-orange-dark hover:to-pet-orange transition-all duration-200 font-semibold flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                <ShoppingCart className="h-5 w-5" />
+                <span>Add {selectedQuantity} to Cart - ₱{((item.effectivePrice || item.basePrice) * selectedQuantity).toFixed(2)}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {showImageModal && item.image && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setShowImageModal(false)}
+        >
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex items-center justify-center">
+            <button
+              onClick={() => setShowImageModal(false)}
+              className="absolute top-4 right-4 bg-white/90 hover:bg-white text-gray-800 p-2 rounded-full shadow-lg transition-colors duration-200 z-10"
+              aria-label="Close image"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <img
+              src={item.image}
+              alt={item.name}
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         </div>
       )}
