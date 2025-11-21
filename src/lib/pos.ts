@@ -509,6 +509,51 @@ export const posAPI = {
     return data;
   },
 
+  async getPendingPayments() {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('payment_status', 'pending')
+      .eq('order_status', 'completed')
+      .order('order_date', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async markOrderAsPaid(orderId: string, paymentData: {
+    payment_method: string;
+    amount: number;
+    reference_number?: string;
+  }) {
+    try {
+      // Create payment record
+      await this.createPayment({
+        order_id: orderId,
+        payment_method: paymentData.payment_method,
+        amount: paymentData.amount,
+        reference_number: paymentData.reference_number
+      });
+
+      // Update order payment status
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          payment_status: 'paid',
+          paid_at: new Date().toISOString(),
+          paid_amount: paymentData.amount
+        })
+        .eq('id', orderId);
+
+      if (updateError) throw updateError;
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error marking order as paid:', error);
+      throw error;
+    }
+  },
+
   // ==================== PAYMENTS ====================
   
   async createPayment(paymentData: {

@@ -8,12 +8,14 @@ import {
   Coins,
   AlertTriangle,
   BarChart3,
-  Calendar
+  Calendar,
+  Clock
 } from 'lucide-react';
 import QuickSale from './POS/QuickSale';
 import CustomerManagement from './POS/CustomerManagement';
 import InventoryManagement from './POS/InventoryManagement';
 import Reports from './POS/Reports';
+import PendingPayments from './POS/PendingPayments';
 
 const POSDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -23,7 +25,7 @@ const POSDashboard: React.FC = () => {
   const [customerStats, setCustomerStats] = useState<any>(null);
   const [inventoryValue, setInventoryValue] = useState<any>(null);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'quicksale' | 'customers' | 'inventory' | 'reports'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'quicksale' | 'customers' | 'inventory' | 'reports' | 'pending-payments'>('dashboard');
 
   useEffect(() => {
     loadDashboardData();
@@ -138,6 +140,23 @@ const POSDashboard: React.FC = () => {
     );
   }
 
+  // Pending Payments View
+  if (activeView === 'pending-payments') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setActiveView('dashboard')}
+            className="px-4 py-2 bg-pet-orange text-white rounded-lg hover:bg-pet-orange-dark transition-colors"
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
+        <PendingPayments />
+      </div>
+    );
+  }
+
   // Main Dashboard View
   return (
     <div className="space-y-6">
@@ -230,7 +249,7 @@ const POSDashboard: React.FC = () => {
       {/* Quick Actions - MOVED TO TOP */}
       <div className="bg-gradient-to-r from-pet-orange to-pet-orange-dark rounded-xl shadow-lg p-6 text-white">
         <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <button 
             onClick={() => setActiveView('quicksale')}
             className="bg-white/20 hover:bg-white/30 transition-colors p-4 rounded-lg text-center group"
@@ -238,6 +257,14 @@ const POSDashboard: React.FC = () => {
             <ShoppingCart className="h-6 w-6 mx-auto mb-2 group-hover:scale-110 transition-transform" />
             <span className="text-sm font-semibold">Quick Sale</span>
             <p className="text-xs opacity-75 mt-1">Process in-store sales</p>
+          </button>
+          <button 
+            onClick={() => setActiveView('pending-payments')}
+            className="bg-white/20 hover:bg-white/30 transition-colors p-4 rounded-lg text-center group border-2 border-yellow-400"
+          >
+            <Clock className="h-6 w-6 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-semibold">Pay Later</span>
+            <p className="text-xs opacity-75 mt-1">Manage pending payments</p>
           </button>
           <button 
             onClick={() => setActiveView('customers')}
@@ -265,6 +292,31 @@ const POSDashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Pending Payments Alert */}
+      {recentOrders.filter((o: any) => o.payment_status === 'pending').length > 0 && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-6 rounded-lg">
+          <div className="flex items-start">
+            <Clock className="h-5 w-5 text-yellow-600 mt-0.5 mr-3" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-yellow-800 mb-2">
+                  ⏰ Pending Payments
+                </h3>
+                <button
+                  onClick={() => setActiveView('pending-payments')}
+                  className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors text-sm font-semibold"
+                >
+                  Manage Payments →
+                </button>
+              </div>
+              <p className="text-sm text-yellow-700">
+                You have {recentOrders.filter((o: any) => o.payment_status === 'pending').length} order(s) with pending payments
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Low Stock Alert */}
       {lowStockItems.length > 0 && (

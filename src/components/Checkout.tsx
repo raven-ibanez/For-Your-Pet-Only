@@ -22,6 +22,8 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('gcash');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [cashAmountPaid, setCashAmountPaid] = useState('');
+  const [cashChangeNeeded, setCashChangeNeeded] = useState('');
 
   React.useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -29,12 +31,40 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
 
   // Set default payment method when payment methods are loaded
   React.useEffect(() => {
-    if (paymentMethods.length > 0 && !paymentMethod) {
+    if (paymentMethods.length > 0 && paymentMethod !== 'cash' && !paymentMethods.find(m => m.id === paymentMethod)) {
       setPaymentMethod(paymentMethods[0].id as PaymentMethod);
     }
   }, [paymentMethods, paymentMethod]);
 
   const selectedPaymentMethod = paymentMethods.find(method => method.id === paymentMethod);
+
+  // Check if payment method is QR PH and calculate 1% fee
+  const isQRPH = selectedPaymentMethod?.name.toLowerCase().includes('qr ph') || 
+                 selectedPaymentMethod?.name.toLowerCase().includes('qrph') ||
+                 selectedPaymentMethod?.id.toLowerCase().includes('qr-ph') ||
+                 selectedPaymentMethod?.id.toLowerCase().includes('qrph');
+  
+  const qrphFee = React.useMemo(() => {
+    if (isQRPH && totalPrice > 0) {
+      return totalPrice * 0.01; // 1% fee
+    }
+    return 0;
+  }, [isQRPH, totalPrice]);
+
+  const finalTotal = React.useMemo(() => {
+    return totalPrice + qrphFee;
+  }, [totalPrice, qrphFee]);
+
+  // Calculate change when cash amount paid changes
+  const cashChange = React.useMemo(() => {
+    if (paymentMethod === 'cash' && cashAmountPaid) {
+      const paid = parseFloat(cashAmountPaid);
+      if (!isNaN(paid) && paid >= finalTotal) {
+        return (paid - finalTotal).toFixed(2);
+      }
+    }
+    return '0.00';
+  }, [cashAmountPaid, finalTotal, paymentMethod]);
 
   const handleProceedToPayment = () => {
     setStep('payment');
@@ -68,15 +98,22 @@ ${cartItems.map(item => {
         : addOn.name
     ).join(', ')}`;
   }
-  itemDetails += ` x${item.quantity} - ₱${item.totalPrice * item.quantity}`;
+  // Get base price (use basePrice or effectivePrice)
+  const basePrice = item.basePrice || item.effectivePrice || item.totalPrice;
+  itemDetails += ` ₱${basePrice.toFixed(2)} x ${item.quantity} - ₱${(item.totalPrice * item.quantity).toFixed(2)}`;
   return itemDetails;
-}).join('\n')}
+}).join('\n\n')}
 
-💰 TOTAL: ₱${totalPrice}
+💰 SUBTOTAL: ₱${totalPrice.toFixed(2)}
+${qrphFee > 0 ? `💳 QR PH Fee (1%): ₱${qrphFee.toFixed(2)}` : ''}
 ${serviceType === 'delivery' ? `🛵 DELIVERY FEE:` : ''}
 
-💳 Payment: ${selectedPaymentMethod?.name || paymentMethod}
-📸 Payment Screenshot: Please attach your payment receipt screenshot
+💰 TOTAL: ₱${finalTotal.toFixed(2)}
+
+💳 Payment: ${paymentMethod === 'cash' ? 'Cash' : (selectedPaymentMethod?.name || paymentMethod)}
+${paymentMethod === 'cash' 
+  ? `💰 Amount Paid: ₱${cashAmountPaid || '0.00'}\n${cashChange !== '0.00' ? `🔄 Change: ₱${cashChange}` : ''}${cashChangeNeeded ? `\n📝 Change Note: ${cashChangeNeeded}` : ''}`
+  : `📸 Payment Screenshot: Please attach your payment receipt screenshot${qrphFee > 0 ? `\n💡 Note: 1% QR PH convenience fee included` : ''}`}
 
 ${notes ? `📝 Notes: ${notes}` : ''}
 
@@ -316,11 +353,34 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           <h2 className="text-2xl font-noto font-medium text-black mb-6">Choose Payment Method</h2>
           
           <div className="grid grid-cols-1 gap-4 mb-6">
+            {/* Cash Payment Option */}
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMethod('cash');
+                setCashAmountPaid('');
+                setCashChangeNeeded('');
+              }}
+              className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${
+                paymentMethod === 'cash'
+                  ? 'border-red-600 bg-red-600 text-white'
+                  : 'border-red-300 bg-white text-gray-700 hover:border-red-400'
+              }`}
+            >
+              <span className="text-2xl">💵</span>
+              <span className="font-medium">Cash</span>
+            </button>
+            
+            {/* Other Payment Methods */}
             {paymentMethods.map((method) => (
               <button
                 key={method.id}
                 type="button"
-                onClick={() => setPaymentMethod(method.id as PaymentMethod)}
+                onClick={() => {
+                  setPaymentMethod(method.id as PaymentMethod);
+                  setCashAmountPaid('');
+                  setCashChangeNeeded('');
+                }}
                 className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${
                   paymentMethod === method.id
                     ? 'border-red-600 bg-red-600 text-white'
@@ -333,8 +393,93 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
             ))}
           </div>
 
+          {/* Cash Payment Details */}
+          {paymentMethod === 'cash' && (
+            <div className="bg-green-50 rounded-lg p-6 mb-6 border-2 border-green-200">
+              <h3 className="font-medium text-black mb-4">💵 Cash Payment Details</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Amount Paid *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={finalTotal}
+                    value={cashAmountPaid}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setCashAmountPaid(value);
+                      // Auto-calculate if amount is sufficient
+                      if (value && parseFloat(value) >= finalTotal) {
+                        const change = (parseFloat(value) - finalTotal).toFixed(2);
+                        if (parseFloat(change) > 0) {
+                          setCashChangeNeeded(`Change needed: ₱${change}`);
+                        } else {
+                          setCashChangeNeeded('');
+                        }
+                      } else {
+                        setCashChangeNeeded('');
+                      }
+                    }}
+                    className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
+                    placeholder={`₱${finalTotal.toFixed(2)}`}
+                    required={paymentMethod === 'cash'}
+                  />
+                  <p className="text-xs text-gray-600 mt-1">
+                    {qrphFee > 0 ? (
+                      <>
+                        Subtotal: ₱{totalPrice.toFixed(2)}<br />
+                        QR PH Fee (1%): ₱{qrphFee.toFixed(2)}<br />
+                        <span className="font-semibold">Total: ₱{finalTotal.toFixed(2)}</span>
+                      </>
+                    ) : (
+                      `Total amount: ₱${totalPrice.toFixed(2)}`
+                    )}
+                  </p>
+                </div>
+
+                {cashAmountPaid && parseFloat(cashAmountPaid) >= finalTotal && (
+                  <div className="bg-white rounded-lg p-4 border-2 border-green-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Change:</span>
+                      <span className="text-xl font-bold text-green-600">₱{cashChange}</span>
+                    </div>
+                    {parseFloat(cashChange) > 0 && (
+                      <p className="text-xs text-green-700 mt-2">
+                        ✓ Please prepare change of ₱{cashChange}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {cashAmountPaid && parseFloat(cashAmountPaid) < finalTotal && (
+                  <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                    <p className="text-sm text-red-600">
+                      ⚠️ Amount paid (₱{parseFloat(cashAmountPaid).toFixed(2)}) is less than total (₱{finalTotal.toFixed(2)})
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Additional Notes (Optional)
+                  </label>
+                  <textarea
+                    value={cashChangeNeeded}
+                    onChange={(e) => setCashChangeNeeded(e.target.value)}
+                    className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="e.g., Please prepare exact change, No change needed, etc."
+                    rows={2}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Payment Details with QR Code */}
-          {selectedPaymentMethod && (
+          {selectedPaymentMethod && paymentMethod !== 'cash' && (
             <div className="bg-red-50 rounded-lg p-6 mb-6">
               <h3 className="font-medium text-black mb-4">Payment Details</h3>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -342,7 +487,13 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                   <p className="text-sm text-gray-600 mb-1">{selectedPaymentMethod.name}</p>
                   <p className="font-mono text-black font-medium">{selectedPaymentMethod.account_number}</p>
                   <p className="text-sm text-gray-600 mb-3">Account Name: {selectedPaymentMethod.account_name}</p>
-                  <p className="text-xl font-semibold text-black">Amount: ₱{totalPrice}</p>
+                  {qrphFee > 0 && (
+                    <div className="mb-2">
+                      <p className="text-sm text-gray-600">Subtotal: ₱{totalPrice.toFixed(2)}</p>
+                      <p className="text-sm text-orange-600 font-semibold">QR PH Fee (1%): ₱{qrphFee.toFixed(2)}</p>
+                    </div>
+                  )}
+                  <p className="text-xl font-semibold text-black">Amount: ₱{finalTotal.toFixed(2)}</p>
                 </div>
                 <div className="flex-shrink-0">
                   <img 
@@ -359,13 +510,15 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
             </div>
           )}
 
-          {/* Reference Number */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <h4 className="font-medium text-black mb-2">📸 Payment Proof Required</h4>
-            <p className="text-sm text-gray-700">
-              After making your payment, please take a screenshot of your payment receipt and attach it when you send your order via Messenger. This helps us verify and process your order quickly.
-            </p>
-          </div>
+          {/* Reference Number - Only show for non-cash payments */}
+          {paymentMethod !== 'cash' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h4 className="font-medium text-black mb-2">📸 Payment Proof Required</h4>
+              <p className="text-sm text-gray-700">
+                After making your payment, please take a screenshot of your payment receipt and attach it when you send your order via Messenger. This helps us verify and process your order quickly.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Order Summary */}
@@ -417,13 +570,26 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           <div className="border-t border-red-200 pt-4 mb-6">
             <div className="flex items-center justify-between text-2xl font-noto font-semibold text-black">
               <span>Total:</span>
-              <span>₱{totalPrice}</span>
+              <div className="text-right">
+                {qrphFee > 0 && (
+                  <>
+                    <div className="text-sm text-gray-600">Subtotal: ₱{totalPrice.toFixed(2)}</div>
+                    <div className="text-sm text-orange-600">QR PH Fee (1%): ₱{qrphFee.toFixed(2)}</div>
+                  </>
+                )}
+                <span className="font-bold text-lg">₱{finalTotal.toFixed(2)}</span>
+              </div>
             </div>
           </div>
 
           <button
             onClick={handlePlaceOrder}
-            className="w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform bg-red-600 text-white hover:bg-red-700 hover:scale-[1.02]"
+            disabled={paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal)}
+            className={`w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${
+              paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal)
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-red-600 text-white hover:bg-red-700 hover:scale-[1.02]'
+            }`}
           >
             Place Order via Messenger
           </button>
