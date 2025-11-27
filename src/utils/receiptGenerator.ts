@@ -337,18 +337,76 @@ export const generateReceipt = (data: ReceiptData) => {
   return receiptHTML;
 };
 
-export const downloadReceipt = (data: ReceiptData) => {
-  const receiptHTML = generateReceipt(data);
-  const blob = new Blob([receiptHTML], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const windowRef = window.open(url, '_blank');
+export const downloadReceipt = async (data: ReceiptData) => {
+  const html2canvas = (await import('html2canvas')).default;
   
-  if (windowRef) {
-    windowRef.onload = () => {
-      setTimeout(() => {
-        windowRef.print();
-      }, 250);
-    };
+  // Extract just the receipt content from the HTML
+  const receiptHTML = generateReceipt(data);
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(receiptHTML, 'text/html');
+  const receiptElement = doc.querySelector('.receipt');
+  const styles = doc.querySelector('style')?.innerHTML || '';
+  
+  if (!receiptElement) {
+    alert('Failed to generate receipt image.');
+    return;
+  }
+  
+  // Create a temporary container
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.width = '300px';
+  container.style.backgroundColor = '#ffffff';
+  container.style.fontFamily = "'Courier New', monospace";
+  container.style.fontSize = '12px';
+  container.style.color = '#000';
+  container.style.padding = '20px';
+  
+  // Inject styles
+  const styleElement = document.createElement('style');
+  styleElement.textContent = styles.replace(/@media print[^{]*\{[^}]*\}/g, ''); // Remove print media queries
+  document.head.appendChild(styleElement);
+  
+  // Clone and append receipt element
+  const clonedReceipt = receiptElement.cloneNode(true) as HTMLElement;
+  container.appendChild(clonedReceipt);
+  document.body.appendChild(container);
+  
+  // Wait for content to render
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
+  try {
+    // Convert to canvas
+    const canvas = await html2canvas(container, {
+      backgroundColor: '#ffffff',
+      scale: 2, // Higher quality
+      logging: false,
+      useCORS: true,
+      width: container.scrollWidth,
+      height: container.scrollHeight
+    });
+    
+    // Convert canvas to blob and download
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `receipt-${data.orderNumber}-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+    }, 'image/png', 1.0);
+  } catch (error) {
+    console.error('Error generating receipt image:', error);
+    alert('Failed to generate receipt image. Please try again.');
+  } finally {
+    // Clean up
+    document.body.removeChild(container);
+    document.head.removeChild(styleElement);
   }
 };
 

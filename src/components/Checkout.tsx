@@ -401,7 +401,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-black mb-2">
-                    Amount Paid *
+                    Amount to be Paid *
                   </label>
                   <input
                     type="number"
@@ -414,11 +414,8 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                       // Auto-calculate if amount is sufficient
                       if (value && parseFloat(value) >= finalTotal) {
                         const change = (parseFloat(value) - finalTotal).toFixed(2);
-                        if (parseFloat(change) > 0) {
-                          setCashChangeNeeded(`Change needed: ₱${change}`);
-                        } else {
-                          setCashChangeNeeded('');
-                        }
+                        // Removed automatic "Change needed" suggestion
+                        setCashChangeNeeded('');
                       } else {
                         setCashChangeNeeded('');
                       }
@@ -446,6 +443,11 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                       <span className="text-sm font-medium text-gray-700">Change:</span>
                       <span className="text-xl font-bold text-green-600">₱{cashChange}</span>
                     </div>
+                    {cashChangeNeeded && (
+                      <p className="text-xs text-gray-600 mt-2">
+                        📝 {cashChangeNeeded}
+                      </p>
+                    )}
                     {parseFloat(cashChange) > 0 && (
                       <p className="text-xs text-green-700 mt-2">
                         ✓ Please prepare change of ₱{cashChange}
@@ -470,7 +472,6 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                     value={cashChangeNeeded}
                     onChange={(e) => setCashChangeNeeded(e.target.value)}
                     className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    placeholder="e.g., Please prepare exact change, No change needed, etc."
                     rows={2}
                   />
                 </div>

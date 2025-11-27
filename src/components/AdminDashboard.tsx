@@ -42,7 +42,11 @@ const AdminDashboard: React.FC = () => {
     popular: false,
     available: true,
     variations: [],
-    addOns: []
+    addOns: [],
+    costPrice: undefined,
+    margin: undefined,
+    expiryDate: undefined,
+    internalNotes: undefined
   });
 
   const handleAddItem = () => {
@@ -56,7 +60,11 @@ const AdminDashboard: React.FC = () => {
       popular: false,
       available: true,
       variations: [],
-      addOns: []
+      addOns: [],
+      costPrice: undefined,
+      margin: undefined,
+      expiryDate: undefined,
+      internalNotes: undefined
     });
   };
 
@@ -316,6 +324,29 @@ const AdminDashboard: React.FC = () => {
     setFormData({ ...formData, addOns: updatedAddOns });
   };
 
+  // Helper function to check if expiry date is close
+  const getExpiryWarning = (expiryDate?: string) => {
+    if (!expiryDate) return null;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate);
+    expiry.setHours(0, 0, 0, 0);
+    
+    const diffTime = expiry.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return { type: 'expired', days: Math.abs(diffDays), message: 'Expired' };
+    } else if (diffDays <= 7) {
+      return { type: 'critical', days: diffDays, message: `${diffDays} day${diffDays !== 1 ? 's' : ''} left` };
+    } else if (diffDays <= 30) {
+      return { type: 'warning', days: diffDays, message: `${diffDays} days left` };
+    }
+    
+    return null;
+  };
+
   // Dashboard Stats
   const totalItems = menuItems.length;
   const popularItems = menuItems.filter(item => item.popular).length;
@@ -547,6 +578,74 @@ const AdminDashboard: React.FC = () => {
               <p className="text-sm text-gray-500 mt-2">
                 Leave dates empty for indefinite discount period. Discount will only be active if "Enable Discount" is checked and current time is within the date range.
               </p>
+            </div>
+
+            {/* Admin-Only Information Section */}
+            <div className="mb-8 border-t pt-6">
+              <h3 className="text-lg font-playfair font-medium text-black mb-4">Admin-Only Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">✅ Cost Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.costPrice || ''}
+                    onChange={(e) => setFormData({ ...formData, costPrice: e.target.value ? Number(e.target.value) : undefined })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                    placeholder="Enter cost price"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">✅ Margin</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.margin || ''}
+                    onChange={(e) => setFormData({ ...formData, margin: e.target.value ? Number(e.target.value) : undefined })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                    placeholder="Enter margin"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">✅ Expiry Date</label>
+                  <input
+                    type="date"
+                    value={formData.expiryDate || ''}
+                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value || undefined })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  />
+                  {(() => {
+                    const expiryWarning = getExpiryWarning(formData.expiryDate);
+                    return expiryWarning && (
+                      <div className={`mt-2 p-3 rounded-lg text-sm ${
+                        expiryWarning.type === 'expired'
+                          ? 'bg-red-50 border border-red-200 text-red-800'
+                          : expiryWarning.type === 'critical'
+                          ? 'bg-red-50 border border-red-200 text-red-800'
+                          : 'bg-yellow-50 border border-yellow-200 text-yellow-800'
+                      }`}>
+                        <span className="font-medium">⚠️ Warning:</span> {expiryWarning.type === 'expired' 
+                          ? `This item expired ${expiryWarning.days} day${expiryWarning.days !== 1 ? 's' : ''} ago`
+                          : `Expiry date is approaching - ${expiryWarning.message}`
+                        }
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-black mb-2">✅ Internal Notes</label>
+                  <textarea
+                    value={formData.internalNotes || ''}
+                    onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value || undefined })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                    placeholder="Enter internal notes (admin only)"
+                    rows={3}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="mb-8">
@@ -851,6 +950,20 @@ const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col space-y-1">
+                          {(() => {
+                            const expiryWarning = getExpiryWarning(item.expiryDate);
+                            return expiryWarning && (
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                expiryWarning.type === 'expired'
+                                  ? 'bg-red-600 text-white'
+                                  : expiryWarning.type === 'critical'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                ⚠️ {expiryWarning.message}
+                              </span>
+                            );
+                          })()}
                           {item.popular && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">
                               Popular
@@ -959,7 +1072,21 @@ const AdminDashboard: React.FC = () => {
                   </div>
                   
                   <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(() => {
+                        const expiryWarning = getExpiryWarning(item.expiryDate);
+                        return expiryWarning && (
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            expiryWarning.type === 'expired'
+                              ? 'bg-red-600 text-white'
+                              : expiryWarning.type === 'critical'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            ⚠️ {expiryWarning.message}
+                          </span>
+                        );
+                      })()}
                       {item.popular && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">
                           Popular

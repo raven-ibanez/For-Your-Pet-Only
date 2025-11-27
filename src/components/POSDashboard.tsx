@@ -16,8 +16,11 @@ import CustomerManagement from './POS/CustomerManagement';
 import InventoryManagement from './POS/InventoryManagement';
 import Reports from './POS/Reports';
 import PendingPayments from './POS/PendingPayments';
+import { downloadReceipt, ReceiptData } from '../utils/receiptGenerator';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 
 const POSDashboard: React.FC = () => {
+  const { siteSettings } = useSiteSettings();
   const [loading, setLoading] = useState(true);
   const [todaySales, setTodaySales] = useState<any>(null);
   const [topProducts, setTopProducts] = useState<any[]>([]);
@@ -26,10 +29,11 @@ const POSDashboard: React.FC = () => {
   const [inventoryValue, setInventoryValue] = useState<any>(null);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [activeView, setActiveView] = useState<'dashboard' | 'quicksale' | 'customers' | 'inventory' | 'reports' | 'pending-payments'>('dashboard');
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [selectedDate]);
 
   const loadDashboardData = async () => {
     try {
@@ -42,7 +46,7 @@ const POSDashboard: React.FC = () => {
         posAPI.getLowStockItems().catch(e => { console.error('Stock error:', e); return []; }),
         posAPI.getCustomerAnalytics().catch(e => { console.error('Customer error:', e); return null; }),
         posAPI.getInventoryValuation().catch(e => { console.error('Inventory error:', e); return null; }),
-        posAPI.getTodayOrders().catch(e => { console.error('Orders error:', e); return []; })
+        posAPI.getOrdersByDate(selectedDate).catch(e => { console.error('Orders error:', e); return []; })
       ]);
 
       setTodaySales(sales.status === 'fulfilled' ? sales.value : null);
@@ -50,11 +54,67 @@ const POSDashboard: React.FC = () => {
       setLowStockItems((stock.status === 'fulfilled' ? stock.value : []) || []);
       setCustomerStats(customers.status === 'fulfilled' ? customers.value : null);
       setInventoryValue(inventory.status === 'fulfilled' ? inventory.value : null);
-      setRecentOrders((orders.status === 'fulfilled' ? orders.value : [])?.slice(0, 10) || []);
+      setRecentOrders((orders.status === 'fulfilled' ? orders.value : []) || []);
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOrderClick = async (order: any) => {
+    try {
+      // Get full order details with items
+      const orderDetails = await posAPI.getOrderById(order.id);
+      const payments = await posAPI.getPaymentsByOrderId(order.id);
+      
+      // Format order date and time
+      const orderDate = new Date(orderDetails.order_date);
+      const formattedDate = orderDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      const formattedTime = orderDate.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      // Prepare receipt data
+      const receiptData: ReceiptData = {
+        orderNumber: orderDetails.order_number,
+        shopName: siteSettings?.site_name || 'For Your Pets Only',
+        shopDescription: siteSettings?.site_description || '',
+        date: formattedDate,
+        time: formattedTime,
+        customerName: orderDetails.customers?.name || orderDetails.customer_name || 'Walk-in',
+        customerPhone: orderDetails.customers?.phone || orderDetails.customer_phone || undefined,
+        items: (orderDetails.order_items || []).map((item: any) => ({
+          name: item.item_name,
+          quantity: item.quantity,
+          unitPrice: parseFloat(item.unit_price),
+          total: parseFloat(item.total_price)
+        })),
+        subtotal: parseFloat(orderDetails.subtotal || 0),
+        discount: parseFloat(orderDetails.discount_amount || 0),
+        deliveryFee: 0, // Not stored in order, set to 0
+        total: parseFloat(orderDetails.total_amount || 0),
+        paymentMethod: payments.length > 1 ? 'Multiple Payments' : (payments[0]?.payment_method || orderDetails.payment_status || 'Unknown'),
+        amountPaid: payments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || 0), 0) || undefined,
+        change: undefined, // Not stored, would need to calculate
+        isPayLater: orderDetails.payment_status === 'pending',
+        multiPayments: payments.length > 1 ? payments.map((p: any) => ({
+          method: p.payment_method,
+          amount: parseFloat(p.amount || 0)
+        })) : undefined
+      };
+
+      // Download receipt
+      await downloadReceipt(receiptData);
+    } catch (error) {
+      console.error('Error loading order receipt:', error);
+      alert('Failed to load receipt. Please try again.');
     }
   };
 
@@ -398,14 +458,29 @@ const POSDashboard: React.FC = () => {
 
         {/* Recent Orders */}
         <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center mb-6">
-            <ShoppingCart className="h-5 w-5 text-pet-orange mr-2" />
-            <h2 className="text-xl font-bold text-pet-brown">Recent Orders Today</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center">
+              <ShoppingCart className="h-5 w-5 text-pet-orange mr-2" />
+              <h2 className="text-xl font-bold text-pet-brown">Recent Orders</h2>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-4 w-4 text-pet-gray-medium" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-3 py-1 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm"
+              />
+            </div>
           </div>
           {recentOrders.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[600px] overflow-y-auto">
               {recentOrders.map((order: any, index: number) => (
-                <div key={index} className="p-4 bg-pet-cream rounded-lg border-l-4 border-pet-orange">
+                <div 
+                  key={index} 
+                  onClick={() => handleOrderClick(order)}
+                  className="p-4 bg-pet-cream rounded-lg border-l-4 border-pet-orange cursor-pointer hover:bg-pet-orange/10 transition-colors"
+                >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-pet-brown text-sm">
                       {order.order_number}
@@ -429,12 +504,15 @@ const POSDashboard: React.FC = () => {
                   <div className="text-xs text-pet-gray-medium mt-1">
                     {new Date(order.order_date).toLocaleTimeString()}
                   </div>
+                  <div className="text-xs text-pet-orange mt-2 font-semibold">
+                    Click to view receipt →
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
             <p className="text-center text-pet-gray-medium py-8">
-              No orders today yet
+              No orders found for selected date
             </p>
           )}
         </div>

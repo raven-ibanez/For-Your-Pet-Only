@@ -35,6 +35,11 @@ export interface MenuItem {
   currentStock?: number;
   isTracked?: boolean;
   isOutOfStock?: boolean;
+  // Admin-only fields
+  costPrice?: number;
+  margin?: number;
+  expiryDate?: string;
+  internalNotes?: string;
 }
 
 export interface CartItem extends MenuItem {

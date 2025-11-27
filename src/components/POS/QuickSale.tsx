@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Minus, Trash2, ShoppingCart, X, Package, Download, CreditCard } from 'lucide-react';
-import { posAPI } from '../../lib/pos';
+import { posAPI, Customer } from '../../lib/pos';
 import { useMenu } from '../../hooks/useMenu';
 import { useCategories } from '../../hooks/useCategories';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
@@ -24,6 +24,13 @@ const QuickSale: React.FC = () => {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerSuggestions, setCustomerSuggestions] = useState<Customer[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [notes, setNotes] = useState('');
+  const customerInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [amountPaid, setAmountPaid] = useState('');
   const [useMultiPayment, setUseMultiPayment] = useState(false);
@@ -36,9 +43,6 @@ const QuickSale: React.FC = () => {
   const [lastOrderData, setLastOrderData] = useState<ReceiptData | null>(null);
 
   const filteredProducts = menuItems.filter(item => {
-    // Filter by availability
-    if (!item.available) return false;
-
     // Filter by category
     if (selectedCategoryFilter !== 'all' && item.category !== selectedCategoryFilter) {
       return false;
@@ -63,8 +67,68 @@ const QuickSale: React.FC = () => {
 
   console.log(`Products: ${menuItems.length} total, ${filteredProducts.length} shown (available: ${menuItems.filter(i => i.available).length})`);
 
+  // Load customers on mount
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        const data = await posAPI.getAllCustomers();
+        setCustomers(data);
+      } catch (error) {
+        console.error('Error loading customers:', error);
+      }
+    };
+    loadCustomers();
+  }, []);
+
+  // Filter customer suggestions based on input
+  useEffect(() => {
+    if (customerName.trim().length > 0) {
+      const filtered = customers.filter(customer =>
+        customer.name.toLowerCase().includes(customerName.toLowerCase())
+      ).slice(0, 5); // Limit to 5 suggestions
+      setCustomerSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setCustomerSuggestions([]);
+      setShowSuggestions(false);
+      setSelectedCustomer(null);
+    }
+  }, [customerName, customers]);
+
+  // Handle click outside to close suggestions
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        customerInputRef.current &&
+        !customerInputRef.current.contains(event.target as Node) &&
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Handle customer selection
+  const handleCustomerSelect = (customer: Customer) => {
+    setCustomerName(customer.name);
+    setCustomerPhone(customer.phone);
+    setSelectedCustomer(customer);
+    setShowSuggestions(false);
+  };
 
   const addToCart = (product: any) => {
+    // Check if product is unavailable
+    if (!product.available) {
+      alert(`Sorry, ${product.name} is currently unavailable.`);
+      return;
+    }
+    
     // Check stock availability
     if (product.isTracked && product.currentStock !== undefined) {
       if (product.currentStock <= 0) {
@@ -570,7 +634,7 @@ const QuickSale: React.FC = () => {
 
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm text-pet-gray-medium">
-            Showing {filteredProducts.length} of {menuItems.filter(i => i.available).length} available products
+            Showing {filteredProducts.length} of {menuItems.length} products
             {(searchTerm || selectedCategoryFilter !== 'all') && (
               <span className="ml-2">
                 {searchTerm && `(search: "${searchTerm}")`}
@@ -616,7 +680,7 @@ const QuickSale: React.FC = () => {
                 onClick={() => setSearchTerm('')}
                 className="text-pet-orange hover:underline"
               >
-                Clear search to see all {menuItems.filter(i => i.available).length} available products
+                Clear search to see all {menuItems.length} products
               </button>
             </div>
           ) : (
@@ -626,14 +690,16 @@ const QuickSale: React.FC = () => {
                 : null;
               const isOutOfStock = product.isTracked && (product.isOutOfStock || (product.currentStock ?? 0) <= 0);
               const isLowStock = product.isTracked && product.currentStock !== undefined && product.currentStock > 0 && product.currentStock <= 5;
+              const isUnavailable = !product.available;
+              const isDisabled = isOutOfStock || isUnavailable;
               
               return (
                 <button
                   key={product.id}
                   onClick={() => addToCart(product)}
-                  disabled={isOutOfStock}
+                  disabled={isDisabled}
                   className={`p-4 border-2 rounded-lg transition-colors text-left group relative ${
-                    isOutOfStock 
+                    isDisabled
                       ? 'border-red-300 bg-red-50 opacity-60 cursor-not-allowed' 
                       : isLowStock
                       ? 'border-yellow-400 bg-yellow-50 hover:bg-yellow-100'
@@ -653,15 +719,15 @@ const QuickSale: React.FC = () => {
                   )}
                   
                   {/* Stock Badge */}
-                  {stockDisplay !== null && (
+                  {(stockDisplay !== null || isUnavailable) && (
                     <div className={`absolute top-2 left-2 px-2 py-1 rounded-full text-xs font-bold ${
-                      isOutOfStock
+                      isUnavailable || isOutOfStock
                         ? 'bg-red-600 text-white'
                         : isLowStock
                         ? 'bg-yellow-500 text-white'
                         : 'bg-green-600 text-white'
                     }`}>
-                      {isOutOfStock ? 'OUT OF STOCK' : `Stock: ${stockDisplay}`}
+                      {isUnavailable ? 'UNAVAILABLE' : isOutOfStock ? 'OUT OF STOCK' : `Stock: ${stockDisplay}`}
                     </div>
                   )}
                   
@@ -708,19 +774,56 @@ const QuickSale: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
           {/* Customer Info */}
           <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Customer Name *"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base"
-            />
+            <div className="relative" ref={customerInputRef}>
+              <input
+                type="text"
+                placeholder="Customer Name *"
+                value={customerName}
+                onChange={(e) => {
+                  setCustomerName(e.target.value);
+                  setSelectedCustomer(null);
+                }}
+                className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base"
+              />
+              {showSuggestions && customerSuggestions.length > 0 && (
+                <div
+                  ref={suggestionsRef}
+                  className="absolute z-50 w-full mt-1 bg-white border-2 border-pet-orange rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                >
+                  {customerSuggestions.map((customer) => (
+                    <div
+                      key={customer.id}
+                      onClick={() => handleCustomerSelect(customer)}
+                      className="px-4 py-2 hover:bg-pet-cream cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium text-pet-brown">{customer.name}</div>
+                      {customer.phone && (
+                        <div className="text-xs text-gray-500">{customer.phone}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <input
               type="tel"
               placeholder="Phone (optional)"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
               className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base"
+            />
+            {selectedCustomer?.address && (
+              <div className="px-4 py-2 bg-pet-cream rounded-lg border border-pet-orange/20">
+                <div className="text-xs font-semibold text-pet-brown mb-1">Saved Address:</div>
+                <div className="text-sm text-pet-brown">{selectedCustomer.address}</div>
+              </div>
+            )}
+            <textarea
+              placeholder="Notes (optional)"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base resize-none"
+              rows={2}
             />
           </div>
 

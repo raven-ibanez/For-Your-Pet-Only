@@ -509,6 +509,47 @@ export const posAPI = {
     return data;
   },
 
+  async getOrdersByDate(date: string) {
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        customers (name, phone, pet_name)
+      `)
+      .gte('order_date', date)
+      .lt('order_date', new Date(new Date(date).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+      .order('order_date', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getOrderById(orderId: string) {
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        customers (name, phone, pet_name),
+        order_items (*)
+      `)
+      .eq('id', orderId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getPaymentsByOrderId(orderId: string) {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('payment_date', { ascending: true });
+
+    if (error) throw error;
+    return data;
+  },
+
   async getPendingPayments() {
     const { data, error } = await supabase
       .from('orders')
