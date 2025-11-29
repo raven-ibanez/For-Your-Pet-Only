@@ -3,7 +3,6 @@ import { Search, X } from 'lucide-react';
 import { MenuItem, CartItem } from '../types';
 import { useCategories } from '../hooks/useCategories';
 import MenuItemCard from './MenuItemCard';
-import MobileNav from './MobileNav';
 
 // Preload images for better performance
 const preloadImages = (items: MenuItem[]) => {
@@ -120,10 +119,32 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
 
   return (
     <>
-      <MobileNav 
-        activeCategory={activeCategory}
-        onCategoryClick={handleCategoryClick}
-      />
+      {/* Search Bar - Sticky outside main container */}
+      <div className="sticky top-[176px] md:top-[176px] z-30 bg-white/95 backdrop-blur-md border-b-2 border-pet-orange shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="Search products or categories..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-12 py-3 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-lg"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="text-center mb-8">
         <h2 className="text-4xl font-display font-bold text-pet-orange-dark mb-4">Our Products 🐾</h2>
@@ -131,28 +152,6 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
           Browse our carefully curated selection of premium pet supplies, toys, treats, and essentials 
           to keep your furbabies happy and healthy!
         </p>
-
-        {/* Search Bar */}
-        <div className="max-w-2xl mx-auto mb-6">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            <input
-              type="text"
-              placeholder="Search products or categories..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-12 py-3 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-lg"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            )}
-          </div>
-        </div>
 
         {/* Category Filter */}
         <div className="max-w-4xl mx-auto mb-8">

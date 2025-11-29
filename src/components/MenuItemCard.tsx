@@ -18,6 +18,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   const [showCustomization, setShowCustomization] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [showQuantityModal, setShowQuantityModal] = useState(false);
+  const [showProductDetails, setShowProductDetails] = useState(false);
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [selectedVariation, setSelectedVariation] = useState<Variation | undefined>(
     item.variations?.[0]
@@ -140,9 +141,21 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     return groups;
   }, {} as Record<string, AddOn[]>);
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't open modal if clicking on buttons or interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('input') || target.closest('label')) {
+      return;
+    }
+    setShowProductDetails(true);
+  };
+
   return (
     <>
-      <div className={`bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden group animate-scale-in border border-gray-100 ${!item.available ? 'opacity-60' : ''}`}>
+      <div 
+        className={`bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden group animate-scale-in border border-gray-100 cursor-pointer ${!item.available ? 'opacity-60' : ''}`}
+        onClick={handleCardClick}
+      >
         {/* Image Container with Badges */}
         <div className="relative h-48 bg-gradient-to-br from-gray-50 to-gray-100">
           {item.image ? (
@@ -152,7 +165,10 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
               className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105 cursor-pointer"
               loading="lazy"
               decoding="async"
-              onClick={() => setShowImageModal(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowImageModal(true);
+              }}
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.nextElementSibling?.classList.remove('hidden');
@@ -207,7 +223,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
             )}
           </div>
           
-          <p className={`text-sm mb-4 leading-relaxed ${!item.available ? 'text-gray-400' : 'text-gray-600'}`}>
+          <p className={`text-sm mb-4 leading-relaxed line-clamp-2 whitespace-pre-line ${!item.available ? 'text-gray-400' : 'text-gray-600'}`}>
             {!item.available ? 'Currently Unavailable' : item.description}
           </p>
           
@@ -252,7 +268,10 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                 </button>
               ) : quantity === 0 ? (
                 <button
-                  onClick={handleAddToCart}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddToCart();
+                  }}
                   className="bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white px-6 py-2.5 rounded-xl hover:from-pet-orange-dark hover:to-pet-orange transition-all duration-200 transform hover:scale-105 font-medium text-sm shadow-lg hover:shadow-xl"
                 >
                   {item.variations?.length || item.addOns?.length ? '⚙️ Customize' : '🛒 Add to Cart'}
@@ -260,14 +279,20 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
               ) : (
                 <div className="flex items-center space-x-2 bg-gradient-to-r from-pet-beige to-pet-cream rounded-xl p-1 border-2 border-pet-orange">
                   <button
-                    onClick={handleDecrement}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDecrement();
+                    }}
                     className="p-2 hover:bg-pet-orange hover:text-white rounded-lg transition-colors duration-200 hover:scale-110"
                   >
                     <Minus className="h-4 w-4" />
                   </button>
                   <span className="font-bold text-pet-brown min-w-[28px] text-center text-sm">{quantity}</span>
                   <button
-                    onClick={handleIncrement}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleIncrement();
+                    }}
                     className="p-2 hover:bg-pet-orange hover:text-white rounded-lg transition-colors duration-200 hover:scale-110"
                   >
                     <Plus className="h-4 w-4" />
@@ -578,6 +603,88 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
               className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Product Details Modal */}
+      {showProductDetails && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setShowProductDetails(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between rounded-t-2xl z-10">
+              <h3 className="text-2xl font-bold text-gray-900">{item.name}</h3>
+              <button
+                onClick={() => setShowProductDetails(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+              >
+                <X className="h-6 w-6 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Product Image */}
+              {item.image && (
+                <div className="mb-6">
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    className="w-full h-auto max-h-96 object-contain rounded-xl bg-gray-50"
+                  />
+                </div>
+              )}
+
+              {/* Full Description */}
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">Description</h4>
+                <p className={`text-base leading-relaxed whitespace-pre-wrap ${!item.available ? 'text-gray-400' : 'text-gray-700'}`}>
+                  {!item.available ? 'Currently Unavailable' : item.description}
+                </p>
+              </div>
+
+              {/* Pricing */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-pet-beige to-pet-cream rounded-xl">
+                {item.isOnDiscount && item.discountPrice ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-3xl font-bold text-pet-orange-dark">
+                        ₱{item.discountPrice.toFixed(2)}
+                      </span>
+                      <span className="text-lg text-gray-500 line-through">
+                        ₱{item.basePrice.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="text-sm text-pet-orange font-semibold">
+                      Save ₱{(item.basePrice - item.discountPrice).toFixed(2)} ({Math.round(((item.basePrice - item.discountPrice) / item.basePrice) * 100)}% OFF)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-3xl font-bold text-pet-brown">
+                    ₱{item.basePrice.toFixed(2)}
+                  </div>
+                )}
+              </div>
+
+              {/* Add to Cart Button */}
+              {item.available && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowProductDetails(false);
+                    handleAddToCart();
+                  }}
+                  className="w-full bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white py-4 rounded-xl hover:from-pet-orange-dark hover:to-pet-orange transition-all duration-200 font-semibold flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  <span>{item.variations?.length || item.addOns?.length ? '⚙️ Customize & Add to Cart' : '🛒 Add to Cart'}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

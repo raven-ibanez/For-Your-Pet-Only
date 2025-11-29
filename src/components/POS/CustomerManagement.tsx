@@ -33,7 +33,8 @@ const CustomerManagement: React.FC = () => {
     pet_name: '',
     pet_type: 'dog',
     pet_breed: '',
-    pet_age: ''
+    pet_age: '',
+    note: ''
   });
 
   useEffect(() => {
@@ -59,6 +60,7 @@ const CustomerManagement: React.FC = () => {
         setCustomers(results);
       } catch (error) {
         console.error('Error searching:', error);
+        // Fallback to client-side filtering if API fails
       }
     } else {
       loadCustomers();
@@ -66,30 +68,93 @@ const CustomerManagement: React.FC = () => {
   };
 
   const handleAddCustomer = async () => {
-    if (!formData.name || !formData.phone) {
-      alert('Name and phone are required');
+    if (!formData.name) {
+      alert('Name is required');
       return;
     }
 
     try {
       await posAPI.createCustomer({
         name: formData.name,
-        phone: formData.phone,
+        phone: formData.phone || undefined,
         email: formData.email || undefined,
         address: formData.address || undefined,
         pet_name: formData.pet_name || undefined,
         pet_type: formData.pet_type || undefined,
         pet_breed: formData.pet_breed || undefined,
-        pet_age: formData.pet_age ? parseInt(formData.pet_age) : undefined
+        pet_age: formData.pet_age ? parseInt(formData.pet_age) : undefined,
+        note: formData.note || undefined
       });
 
       setShowAddModal(false);
       resetForm();
       loadCustomers();
       alert('Customer added successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding customer:', error);
-      alert('Failed to add customer');
+      alert(`Failed to add customer: ${error.message || error}`);
+    }
+  };
+
+  const handleEditCustomer = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setFormData({
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email || '',
+      address: customer.address || '',
+      pet_name: customer.pet_name || '',
+      pet_type: customer.pet_type || 'dog',
+      pet_breed: customer.pet_breed || '',
+      pet_age: customer.pet_age?.toString() || '',
+      note: customer.note || ''
+    });
+    setShowAddModal(true);
+  };
+
+  const handleUpdateCustomer = async () => {
+    if (!editingCustomer) return;
+    if (!formData.name) {
+      alert('Name is required');
+      return;
+    }
+
+    try {
+      await posAPI.updateCustomer(editingCustomer.id, {
+        name: formData.name,
+        phone: formData.phone || undefined,
+        email: formData.email || undefined,
+        address: formData.address || undefined,
+        pet_name: formData.pet_name || undefined,
+        pet_type: formData.pet_type || undefined,
+        pet_breed: formData.pet_breed || undefined,
+        pet_age: formData.pet_age ? parseInt(formData.pet_age) : undefined,
+        note: formData.note || undefined
+      });
+
+      setShowAddModal(false);
+      setEditingCustomer(null);
+      resetForm();
+      loadCustomers();
+      alert('Customer updated successfully!');
+    } catch (error) {
+      console.error('Error updating customer:', error);
+      alert('Failed to update customer');
+    }
+  };
+
+  const handleDeleteCustomer = async (customer: Customer) => {
+    if (!confirm(`Are you sure you want to delete ${customer.name}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await posAPI.deleteCustomer(customer.id);
+      loadCustomers();
+      alert('Customer deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+      alert('Failed to delete customer');
     }
   };
 
@@ -102,15 +167,23 @@ const CustomerManagement: React.FC = () => {
       pet_name: '',
       pet_type: 'dog',
       pet_breed: '',
-      pet_age: ''
+      pet_age: '',
+      note: ''
     });
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.phone.includes(searchTerm) ||
-    (customer.pet_name && customer.pet_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredCustomers = React.useMemo(() => {
+    if (!searchTerm.trim()) {
+      return customers;
+    }
+    const searchLower = searchTerm.toLowerCase().trim();
+    return customers.filter(customer =>
+      customer.name.toLowerCase().includes(searchLower) ||
+      customer.phone.replace(/\s+/g, '').includes(searchTerm.replace(/\s+/g, '')) ||
+      (customer.email && customer.email.toLowerCase().includes(searchLower)) ||
+      (customer.pet_name && customer.pet_name.toLowerCase().includes(searchLower))
+    );
+  }, [customers, searchTerm]);
 
   return (
     <div className="space-y-6">
@@ -139,9 +212,15 @@ const CustomerManagement: React.FC = () => {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              if (!e.target.value) loadCustomers();
+              if (!e.target.value.trim()) {
+                loadCustomers();
+              }
             }}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault(); // Prevent form submission or page reload
+              }
+            }}
             className="w-full pl-10 pr-4 py-3 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange"
           />
         </div>
@@ -223,10 +302,18 @@ const CustomerManagement: React.FC = () => {
                     </td>
                     <td className="p-3">
                       <div className="flex items-center space-x-2">
-                        <button className="text-blue-600 hover:text-blue-800">
+                        <button 
+                          onClick={() => handleEditCustomer(customer)}
+                          className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit customer"
+                        >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button className="text-red-600 hover:text-red-800">
+                        <button 
+                          onClick={() => handleDeleteCustomer(customer)}
+                          className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded transition-colors"
+                          title="Delete customer"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -244,10 +331,13 @@ const CustomerManagement: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b-2 border-pet-orange p-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-pet-orange-dark">Add New Customer</h2>
+              <h2 className="text-2xl font-bold text-pet-orange-dark">
+                {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
+              </h2>
               <button
                 onClick={() => {
                   setShowAddModal(false);
+                  setEditingCustomer(null);
                   resetForm();
                 }}
                 className="text-gray-500 hover:text-gray-700"
@@ -275,7 +365,7 @@ const CustomerManagement: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-pet-brown mb-1">Phone *</label>
+                    <label className="block text-sm font-semibold text-pet-brown mb-1">Phone</label>
                     <input
                       type="tel"
                       value={formData.phone}
@@ -365,18 +455,31 @@ const CustomerManagement: React.FC = () => {
                 </div>
               </div>
 
+              {/* Note */}
+              <div>
+                <label className="block text-sm font-semibold text-pet-brown mb-1">Note</label>
+                <textarea
+                  value={formData.note}
+                  onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange"
+                  placeholder="Add any notes about this customer..."
+                  rows={3}
+                />
+              </div>
+
               {/* Actions */}
               <div className="flex items-center space-x-4 pt-4">
                 <button
-                  onClick={handleAddCustomer}
+                  onClick={editingCustomer ? handleUpdateCustomer : handleAddCustomer}
                   className="flex-1 bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white py-3 rounded-lg font-bold hover:from-pet-orange-dark hover:to-pet-orange transition-all flex items-center justify-center space-x-2"
                 >
                   <Save className="h-5 w-5" />
-                  <span>Save Customer</span>
+                  <span>{editingCustomer ? 'Update Customer' : 'Save Customer'}</span>
                 </button>
                 <button
                   onClick={() => {
                     setShowAddModal(false);
+                    setEditingCustomer(null);
                     resetForm();
                   }}
                   className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"

@@ -15,6 +15,7 @@ export interface Customer {
   pet_type?: string;
   pet_breed?: string;
   pet_age?: number;
+  note?: string;
   total_orders: number;
   total_spent: number;
   loyalty_points: number;
@@ -104,24 +105,40 @@ export const posAPI = {
 
   async createCustomer(customerData: {
     name: string;
-    phone: string;
+    phone?: string;
     email?: string;
     address?: string;
     pet_name?: string;
     pet_type?: string;
     pet_breed?: string;
     pet_age?: number;
+    note?: string;
   }) {
     try {
       // Generate customer code
       const customerCode = `CUST-${Date.now().toString().slice(-6)}`;
       
+      // Prepare insert data, ensuring phone has a default value if not provided
+      // Note: phone is NOT NULL in database, so we use empty string as default
+      const insertData: any = {
+        customer_code: customerCode,
+        name: customerData.name,
+        phone: customerData.phone || '', // Default to empty string if not provided
+      };
+      
+      // Only add optional fields if they have values
+      if (customerData.email) insertData.email = customerData.email;
+      if (customerData.address) insertData.address = customerData.address;
+      if (customerData.pet_name) insertData.pet_name = customerData.pet_name;
+      if (customerData.pet_type) insertData.pet_type = customerData.pet_type;
+      if (customerData.pet_breed) insertData.pet_breed = customerData.pet_breed;
+      if (customerData.pet_age) insertData.pet_age = customerData.pet_age;
+      // Add note field if provided (requires migration 20250104000000_add_note_to_customers.sql)
+      if (customerData.note) insertData.note = customerData.note;
+      
       const { data, error } = await supabase
         .from('customers')
-        .insert([{
-          customer_code: customerCode,  // Generate customer code
-          ...customerData
-        }])
+        .insert([insertData])
         .select()
         .single();
       
@@ -133,6 +150,57 @@ export const posAPI = {
       return data as Customer;
     } catch (error: any) {
       console.error('Create customer failed:', error);
+      throw error;
+    }
+  },
+
+  async updateCustomer(id: string, customerData: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    pet_name?: string;
+    pet_type?: string;
+    pet_breed?: string;
+    pet_age?: number;
+    note?: string;
+  }) {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .update(customerData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Update customer error:', error);
+        throw new Error(`Failed to update customer: ${error.message}`);
+      }
+      
+      return data as Customer;
+    } catch (error: any) {
+      console.error('Update customer failed:', error);
+      throw error;
+    }
+  },
+
+  async deleteCustomer(id: string) {
+    try {
+      // Soft delete by setting is_active to false
+      const { error } = await supabase
+        .from('customers')
+        .update({ is_active: false })
+        .eq('id', id);
+      
+      if (error) {
+        console.error('Delete customer error:', error);
+        throw new Error(`Failed to delete customer: ${error.message}`);
+      }
+      
+      return true;
+    } catch (error: any) {
+      console.error('Delete customer failed:', error);
       throw error;
     }
   },
@@ -518,6 +586,25 @@ export const posAPI = {
       `)
       .gte('order_date', date)
       .lt('order_date', new Date(new Date(date).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+      .order('order_date', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getOrdersByDateRange(startDate: string, endDate: string) {
+    // Set end date to end of day (23:59:59)
+    const endDateTime = new Date(endDate);
+    endDateTime.setHours(23, 59, 59, 999);
+    
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        customers (name, phone, pet_name)
+      `)
+      .gte('order_date', startDate)
+      .lte('order_date', endDateTime.toISOString())
       .order('order_date', { ascending: false });
 
     if (error) throw error;

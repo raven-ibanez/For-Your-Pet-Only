@@ -9,7 +9,8 @@ import {
   AlertTriangle,
   BarChart3,
   Calendar,
-  Clock
+  Clock,
+  Download
 } from 'lucide-react';
 import QuickSale from './POS/QuickSale';
 import CustomerManagement from './POS/CustomerManagement';
@@ -28,12 +29,15 @@ const POSDashboard: React.FC = () => {
   const [customerStats, setCustomerStats] = useState<any>(null);
   const [inventoryValue, setInventoryValue] = useState<any>(null);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [activeView, setActiveView] = useState<'dashboard' | 'quicksale' | 'customers' | 'inventory' | 'reports' | 'pending-payments'>('dashboard');
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedDate]);
+    setSelectedOrders(new Set()); // Clear selections when date range changes
+  }, [startDate, endDate]);
 
   const loadDashboardData = async () => {
     try {
@@ -46,7 +50,7 @@ const POSDashboard: React.FC = () => {
         posAPI.getLowStockItems().catch(e => { console.error('Stock error:', e); return []; }),
         posAPI.getCustomerAnalytics().catch(e => { console.error('Customer error:', e); return null; }),
         posAPI.getInventoryValuation().catch(e => { console.error('Inventory error:', e); return null; }),
-        posAPI.getOrdersByDate(selectedDate).catch(e => { console.error('Orders error:', e); return []; })
+        posAPI.getOrdersByDateRange(startDate, endDate).catch(e => { console.error('Orders error:', e); return []; })
       ]);
 
       setTodaySales(sales.status === 'fulfilled' ? sales.value : null);
@@ -115,6 +119,134 @@ const POSDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error loading order receipt:', error);
       alert('Failed to load receipt. Please try again.');
+    }
+  };
+
+  const handleOrderSelect = (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedOrders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedOrders.size === recentOrders.length) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(recentOrders.map((o: any) => o.id)));
+    }
+  };
+
+  const handleExportToExcel = async () => {
+    if (selectedOrders.size === 0) {
+      alert('Please select at least one order to export.');
+      return;
+    }
+
+    try {
+      // Get full details for selected orders
+      const ordersToExport = recentOrders.filter((o: any) => selectedOrders.has(o.id));
+      const ordersWithDetails = await Promise.all(
+        ordersToExport.map(async (order: any) => {
+          try {
+            const orderDetails = await posAPI.getOrderById(order.id);
+            const payments = await posAPI.getPaymentsByOrderId(order.id);
+            return { orderDetails, payments };
+          } catch (error) {
+            console.error(`Error fetching order ${order.id}:`, error);
+            return null;
+          }
+        })
+      );
+
+      // Prepare CSV data
+      const csvRows: string[] = [];
+      
+      // Header row
+      csvRows.push([
+        'Order Number',
+        'Order Date',
+        'Order Time',
+        'Customer Name',
+        'Customer Phone',
+        'Customer Email',
+        'Order Status',
+        'Payment Status',
+        'Subtotal',
+        'Discount',
+        'Delivery Fee',
+        'Total Amount',
+        'Payment Method(s)',
+        'Amount Paid',
+        'Items (Name, Quantity, Unit Price, Total)',
+        'Notes',
+        'Order Type'
+      ].join(','));
+
+      // Data rows
+      ordersWithDetails.forEach((data: any) => {
+        if (!data) return;
+        
+        const { orderDetails, payments } = data;
+        const orderDate = new Date(orderDetails.order_date);
+        const dateStr = orderDate.toLocaleDateString('en-US');
+        const timeStr = orderDate.toLocaleTimeString('en-US');
+        
+        // Format items
+        const itemsStr = (orderDetails.order_items || [])
+          .map((item: any) => 
+            `${item.item_name} (Qty: ${item.quantity}, Price: ₱${parseFloat(item.unit_price).toFixed(2)}, Total: ₱${parseFloat(item.total_price).toFixed(2)})`
+          )
+          .join('; ');
+
+        // Format payments
+        const paymentMethods = payments.map((p: any) => `${p.payment_method}: ₱${parseFloat(p.amount || 0).toFixed(2)}`).join('; ');
+        const totalPaid = payments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || 0), 0);
+
+        csvRows.push([
+          `"${orderDetails.order_number}"`,
+          `"${dateStr}"`,
+          `"${timeStr}"`,
+          `"${orderDetails.customers?.name || orderDetails.customer_name || 'Walk-in'}"`,
+          `"${orderDetails.customers?.phone || orderDetails.customer_phone || ''}"`,
+          `"${orderDetails.customers?.email || orderDetails.customer_email || ''}"`,
+          `"${orderDetails.order_status || ''}"`,
+          `"${orderDetails.payment_status || ''}"`,
+          `₱${parseFloat(orderDetails.subtotal || 0).toFixed(2)}`,
+          `₱${parseFloat(orderDetails.discount_amount || 0).toFixed(2)}`,
+          `₱${parseFloat(orderDetails.delivery_fee || 0).toFixed(2)}`,
+          `₱${parseFloat(orderDetails.total_amount || 0).toFixed(2)}`,
+          `"${paymentMethods}"`,
+          `₱${totalPaid.toFixed(2)}`,
+          `"${itemsStr}"`,
+          `"${orderDetails.notes || ''}"`,
+          `"${orderDetails.order_type || ''}"`
+        ].join(','));
+      });
+
+      // Create and download CSV file
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `orders_${startDate}_to_${endDate}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      alert(`Exported ${selectedOrders.size} order(s) successfully!`);
+      setSelectedOrders(new Set());
+    } catch (error) {
+      console.error('Error exporting orders:', error);
+      alert('Failed to export orders. Please try again.');
     }
   };
 
@@ -462,57 +594,107 @@ const POSDashboard: React.FC = () => {
             <div className="flex items-center">
               <ShoppingCart className="h-5 w-5 text-pet-orange mr-2" />
               <h2 className="text-xl font-bold text-pet-brown">Recent Orders</h2>
+              {selectedOrders.size > 0 && (
+                <span className="ml-3 text-sm text-pet-orange font-semibold">
+                  ({selectedOrders.size} selected)
+                </span>
+              )}
             </div>
             <div className="flex items-center space-x-2">
+              {selectedOrders.size > 0 && (
+                <button
+                  onClick={handleExportToExcel}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-semibold"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Export Excel ({selectedOrders.size})</span>
+                </button>
+              )}
               <Calendar className="h-4 w-4 text-pet-gray-medium" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-3 py-1 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm"
-              />
+              <div className="flex items-center space-x-2">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-1 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm"
+                />
+                <span className="text-pet-gray-medium">-</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate}
+                  className="px-3 py-1 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm"
+                />
+              </div>
             </div>
           </div>
+          {recentOrders.length > 0 && (
+            <div className="mb-4 flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={selectedOrders.size === recentOrders.length && recentOrders.length > 0}
+                onChange={handleSelectAll}
+                className="w-4 h-4 text-pet-orange border-pet-orange rounded focus:ring-pet-orange"
+              />
+              <label className="text-sm text-pet-gray-medium cursor-pointer" onClick={handleSelectAll}>
+                Select All ({recentOrders.length} orders)
+              </label>
+            </div>
+          )}
           {recentOrders.length > 0 ? (
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
               {recentOrders.map((order: any, index: number) => (
                 <div 
                   key={index} 
-                  onClick={() => handleOrderClick(order)}
-                  className="p-4 bg-pet-cream rounded-lg border-l-4 border-pet-orange cursor-pointer hover:bg-pet-orange/10 transition-colors"
+                  className="p-4 bg-pet-cream rounded-lg border-l-4 border-pet-orange hover:bg-pet-orange/10 transition-colors"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-pet-brown text-sm">
-                      {order.order_number}
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      order.payment_status === 'paid' 
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {order.payment_status}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-pet-gray-medium">
-                    <span>
-                      {order.customers?.name || order.customer_name || 'Walk-in'}
-                    </span>
-                    <span className="font-bold text-pet-orange-dark">
-                      ₱{parseFloat(order.total_amount).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="text-xs text-pet-gray-medium mt-1">
-                    {new Date(order.order_date).toLocaleTimeString()}
-                  </div>
-                  <div className="text-xs text-pet-orange mt-2 font-semibold">
-                    Click to view receipt →
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedOrders.has(order.id)}
+                      onChange={(e) => handleOrderSelect(order.id, e as any)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 w-4 h-4 text-pet-orange border-pet-orange rounded focus:ring-pet-orange cursor-pointer"
+                    />
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => handleOrderClick(order)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-semibold text-pet-brown text-sm">
+                          {order.order_number}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          order.payment_status === 'paid' 
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {order.payment_status}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-pet-gray-medium">
+                        <span>
+                          {order.customers?.name || order.customer_name || 'Walk-in'}
+                        </span>
+                        <span className="font-bold text-pet-orange-dark">
+                          ₱{parseFloat(order.total_amount).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-pet-gray-medium mt-1">
+                        {new Date(order.order_date).toLocaleString()}
+                      </div>
+                      <div className="text-xs text-pet-orange mt-2 font-semibold">
+                        Click to view receipt →
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <p className="text-center text-pet-gray-medium py-8">
-              No orders found for selected date
+              No orders found for selected date range
             </p>
           )}
         </div>
