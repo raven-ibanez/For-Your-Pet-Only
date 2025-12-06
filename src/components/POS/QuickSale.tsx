@@ -394,13 +394,19 @@ const QuickSale: React.FC = () => {
         }
       }
 
-      // Get stock levels BEFORE completing order
+      // Get stock levels BEFORE completing order (only for tracked items)
       console.log('📊 Checking stock levels before sale...');
       const stockBefore: { [key: string]: number } = {};
       for (const item of cart) {
-        const inv = await posAPI.getInventoryForItem(item.id);
-        stockBefore[item.id] = inv?.current_stock || 0;
-        console.log(`Before sale - ${item.name}: ${stockBefore[item.id]} units`);
+        const product = menuItems.find(p => p.id === item.id);
+        // Only check inventory for tracked items
+        if (product?.isTracked) {
+          const inv = await posAPI.getInventoryForItem(item.id);
+          stockBefore[item.id] = inv?.current_stock || 0;
+          console.log(`Before sale - ${item.name}: ${stockBefore[item.id]} units`);
+        } else {
+          console.log(`Before sale - ${item.name}: Not tracked (skipping inventory check)`);
+        }
       }
 
       // Complete order (might trigger database automatic update)
@@ -430,37 +436,49 @@ const QuickSale: React.FC = () => {
       // Wait for trigger to fire (if enabled)
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Check if inventory was updated correctly
+      // Check if inventory was updated correctly (only for tracked items)
       console.log('📊 Verifying inventory updates...');
       for (const item of cart) {
-        const inv = await posAPI.getInventoryForItem(item.id);
-        const currentStock = inv?.current_stock || 0;
-        const expectedStock = stockBefore[item.id] - item.quantity;
-        
-        console.log(`After sale - ${item.name}: ${currentStock} units (expected: ${expectedStock})`);
-        
-        // If stock didn't decrease correctly, update manually
-        if (currentStock !== expectedStock) {
-          console.log(`⚠️ Stock mismatch! Expected ${expectedStock}, got ${currentStock}. Fixing...`);
+        const product = menuItems.find(p => p.id === item.id);
+        // Only verify/update inventory for tracked items
+        if (product?.isTracked) {
+          const inv = await posAPI.getInventoryForItem(item.id);
+          const currentStock = inv?.current_stock || 0;
+          const expectedStock = stockBefore[item.id] - item.quantity;
           
-          // Set to correct stock level
-          const { data, error } = await supabase
-            .from('inventory')
-            .update({
-              current_stock: expectedStock,
-              is_low_stock: expectedStock <= (inv?.minimum_stock || 10),
-              is_out_of_stock: expectedStock <= 0,
-              last_stock_update: new Date().toISOString()
-            })
-            .eq('menu_item_id', item.id)
-            .select()
-            .single();
+          console.log(`After sale - ${item.name}: ${currentStock} units (expected: ${expectedStock})`);
+          
+          // If stock didn't decrease correctly, update manually
+          if (inv && currentStock !== expectedStock) {
+            console.log(`⚠️ Stock mismatch! Expected ${expectedStock}, got ${currentStock}. Fixing...`);
             
-          if (!error) {
-            console.log(`✅ Corrected stock for ${item.name}: ${currentStock} → ${expectedStock}`);
+            // Prevent negative stock - ensure it's at least 0
+            const correctedStock = Math.max(0, expectedStock);
+            
+            // Set to correct stock level (prevent negative)
+            const { data, error } = await supabase
+              .from('inventory')
+              .update({
+                current_stock: correctedStock,
+                is_low_stock: correctedStock <= (inv?.minimum_stock || 10),
+                is_out_of_stock: correctedStock <= 0,
+                last_stock_update: new Date().toISOString()
+              })
+              .eq('menu_item_id', item.id)
+              .select()
+              .single();
+              
+            if (!error) {
+              if (correctedStock !== expectedStock) {
+                console.warn(`⚠️ Prevented negative stock for ${item.name}: would be ${expectedStock}, set to ${correctedStock}`);
+              }
+              console.log(`✅ Corrected stock for ${item.name}: ${currentStock} → ${correctedStock}`);
+            }
+          } else {
+            console.log(`✅ Stock correctly updated for ${item.name}`);
           }
         } else {
-          console.log(`✅ Stock correctly updated for ${item.name}`);
+          console.log(`After sale - ${item.name}: Not tracked (skipping inventory verification)`);
         }
       }
 
@@ -685,13 +703,21 @@ const QuickSale: React.FC = () => {
             </div>
           ) : (
             filteredProducts.map(product => {
+              // For tracked items, show stock count
               const stockDisplay = product.isTracked && product.currentStock !== undefined 
                 ? product.currentStock 
                 : null;
+              
+              // Stock status for tracked items only
               const isOutOfStock = product.isTracked && (product.isOutOfStock || (product.currentStock ?? 0) <= 0);
               const isLowStock = product.isTracked && product.currentStock !== undefined && product.currentStock > 0 && product.currentStock <= 5;
+              
+              // Availability status (for both tracked and non-tracked items)
               const isUnavailable = !product.available;
               const isDisabled = isOutOfStock || isUnavailable;
+              
+              // For non-tracked items, show availability status
+              const isNonTrackedAvailable = !product.isTracked && product.available;
               
               return (
                 <button
@@ -705,7 +731,7 @@ const QuickSale: React.FC = () => {
                       ? 'border-yellow-400 bg-yellow-50 hover:bg-yellow-100'
                       : 'border-pet-orange hover:bg-pet-cream'
                   }`}
-                  title={`${product.name} - ₱${product.basePrice.toFixed(2)}${stockDisplay !== null ? ` - Stock: ${stockDisplay}` : ''}`}
+                  title={`${product.name} - ₱${product.basePrice.toFixed(2)}${stockDisplay !== null ? ` - Stock: ${stockDisplay}` : product.isTracked ? ' - Not tracked' : ' - Available'}`}
                 >
                   {product.image && (
                     <img 
@@ -718,16 +744,25 @@ const QuickSale: React.FC = () => {
                     />
                   )}
                   
-                  {/* Stock Badge */}
-                  {(stockDisplay !== null || isUnavailable) && (
+                  {/* Stock/Availability Badge */}
+                  {(stockDisplay !== null || isUnavailable || isNonTrackedAvailable) && (
                     <div className={`absolute top-2 left-2 px-2 py-1 rounded-full text-xs font-bold ${
                       isUnavailable || isOutOfStock
                         ? 'bg-red-600 text-white'
                         : isLowStock
                         ? 'bg-yellow-500 text-white'
+                        : isNonTrackedAvailable
+                        ? 'bg-blue-600 text-white'
                         : 'bg-green-600 text-white'
                     }`}>
-                      {isUnavailable ? 'UNAVAILABLE' : isOutOfStock ? 'OUT OF STOCK' : `Stock: ${stockDisplay}`}
+                      {isUnavailable 
+                        ? 'UNAVAILABLE' 
+                        : isOutOfStock 
+                        ? 'OUT OF STOCK' 
+                        : isNonTrackedAvailable
+                        ? 'AVAILABLE'
+                        : `Stock: ${stockDisplay}`
+                      }
                     </div>
                   )}
                   
@@ -748,6 +783,11 @@ const QuickSale: React.FC = () => {
                         isLowStock ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
                       }`}>
                         {stockDisplay} left
+                      </div>
+                    )}
+                    {isNonTrackedAvailable && (
+                      <div className="text-xs font-semibold px-2 py-1 rounded bg-blue-100 text-blue-800">
+                        In Stock
                       </div>
                     )}
                   </div>

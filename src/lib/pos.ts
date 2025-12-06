@@ -442,6 +442,67 @@ export const posAPI = {
     }
   },
 
+  async getStockMovements(startDate?: string, endDate?: string, movementType?: 'in' | 'out' | 'all', menuItemId?: string) {
+    try {
+      let query = supabase
+        .from('stock_movements')
+        .select(`
+          *,
+          menu_items (
+            id,
+            name,
+            category
+          ),
+          staff (
+            id,
+            name
+          ),
+          orders (
+            id,
+            order_number
+          )
+        `)
+        .order('movement_date', { ascending: false })
+        .limit(1000);
+
+      // Filter by date range
+      if (startDate) {
+        query = query.gte('movement_date', startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        query = query.lte('movement_date', endDateTime.toISOString());
+      }
+
+      // Filter by movement type
+      if (movementType && movementType !== 'all') {
+        if (movementType === 'in') {
+          query = query.in('movement_type', ['in', 'adjustment']);
+        } else if (movementType === 'out') {
+          query = query.in('movement_type', ['out', 'wastage']);
+        }
+      }
+
+      // Filter by menu item
+      if (menuItemId) {
+        query = query.eq('menu_item_id', menuItemId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Get stock movements error:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Get stock movements failed:', error);
+      return [];
+    }
+  },
+
   // Sync inventory - creates inventory records for products that don't have them
   async syncInventory() {
     try {

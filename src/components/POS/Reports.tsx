@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, TrendingUp, Coins, ShoppingCart, Users, CreditCard } from 'lucide-react';
 import { posAPI } from '../../lib/pos';
+import { supabase } from '../../lib/supabase';
 
 const Reports: React.FC = () => {
-  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
+  // Initialize with today's date
+  const today = new Date().toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState<string>(today);
+  const [endDate, setEndDate] = useState<string>(today);
   const [todaySales, setTodaySales] = useState<any>(null);
   const [topProducts, setTopProducts] = useState<any[]>([]);
   const [paymentBreakdown, setPaymentBreakdown] = useState<any[]>([]);
@@ -12,15 +16,55 @@ const Reports: React.FC = () => {
 
   useEffect(() => {
     loadReportData();
-  }, [period]);
+  }, [startDate, endDate]);
+
+  // Calculate days between dates
+  const calculateDays = (start: string, end: string): number => {
+    const startTime = new Date(start).getTime();
+    const endTime = new Date(end).getTime();
+    const diffTime = Math.abs(endTime - startTime);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+    return diffDays;
+  };
+
+  // Format date for display
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
 
   const loadReportData = async () => {
     try {
       setLoading(true);
-      const days = period === 'today' ? 1 : period === 'week' ? 7 : 30;
+      const days = calculateDays(startDate, endDate);
 
-      const [sales, products, payments, staff] = await Promise.all([
-        posAPI.getDailySales(),
+      // Get sales for the date range
+      let sales = null;
+      if (startDate === endDate) {
+        // Single day - use getDailySales
+        sales = await posAPI.getDailySales(startDate);
+      } else {
+        // Date range - need to use get_sales_by_date_range directly
+        try {
+          const { data, error } = await supabase.rpc('get_sales_by_date_range', {
+            start_date: startDate,
+            end_date: endDate
+          });
+          if (!error && data?.[0]) {
+            sales = data[0];
+          }
+        } catch (err) {
+          console.error('Date range sales error:', err);
+          // Fallback to single day if range fails
+          sales = await posAPI.getDailySales(endDate);
+        }
+      }
+
+      const [products, payments, staff] = await Promise.all([
         posAPI.getTopProducts(days),
         posAPI.getPaymentMethodBreakdown(days),
         posAPI.getStaffPerformance(days)
@@ -37,7 +81,32 @@ const Reports: React.FC = () => {
     }
   };
 
-  const periodDays = period === 'today' ? 1 : period === 'week' ? 7 : 30;
+  // Quick date presets
+  const setQuickPeriod = (period: 'today' | 'week' | 'month') => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    switch (period) {
+      case 'today':
+        setStartDate(todayStr);
+        setEndDate(todayStr);
+        break;
+      case 'week':
+        const weekAgo = new Date(today);
+        weekAgo.setDate(today.getDate() - 6); // Last 7 days including today
+        setStartDate(weekAgo.toISOString().split('T')[0]);
+        setEndDate(todayStr);
+        break;
+      case 'month':
+        const monthAgo = new Date(today);
+        monthAgo.setDate(today.getDate() - 29); // Last 30 days including today
+        setStartDate(monthAgo.toISOString().split('T')[0]);
+        setEndDate(todayStr);
+        break;
+    }
+  };
+
+  const periodDays = calculateDays(startDate, endDate);
 
   if (loading) {
     return (
@@ -57,41 +126,76 @@ const Reports: React.FC = () => {
         </div>
       </div>
 
-      {/* Period Selector */}
+      {/* Date Range Selector */}
       <div className="bg-white rounded-xl shadow-lg p-4">
-        <div className="flex items-center space-x-2">
-          <Calendar className="h-5 w-5 text-pet-orange" />
-          <span className="text-sm font-semibold text-pet-brown">Time Period:</span>
-          <button
-            onClick={() => setPeriod('today')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-              period === 'today'
-                ? 'bg-pet-orange text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Today
-          </button>
-          <button
-            onClick={() => setPeriod('week')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-              period === 'week'
-                ? 'bg-pet-orange text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Last 7 Days
-          </button>
-          <button
-            onClick={() => setPeriod('month')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-              period === 'month'
-                ? 'bg-pet-orange text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Last 30 Days
-          </button>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-1">
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-pet-orange" />
+              <span className="text-sm font-semibold text-pet-brown">Date Coverage:</span>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-pet-brown">From:</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                max={endDate}
+                className="px-3 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-pet-brown">To:</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                min={startDate}
+                max={new Date().toISOString().split('T')[0]}
+                className="px-3 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm"
+              />
+            </div>
+
+            <div className="px-3 py-2 bg-pet-cream rounded-lg">
+              <span className="text-sm font-semibold text-pet-brown">
+                {startDate === endDate 
+                  ? formatDate(startDate)
+                  : `${formatDate(startDate)} - ${formatDate(endDate)}`
+                }
+              </span>
+              <span className="text-xs text-pet-gray-medium ml-2">
+                ({periodDays} {periodDays === 1 ? 'day' : 'days'})
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 border-l-0 md:border-l-2 md:pl-4 border-pet-beige">
+            <span className="text-xs text-pet-gray-medium hidden sm:block">Quick:</span>
+            <button
+              onClick={() => setQuickPeriod('today')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                startDate === new Date().toISOString().split('T')[0] && endDate === new Date().toISOString().split('T')[0]
+                  ? 'bg-pet-orange text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setQuickPeriod('week')}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              7 Days
+            </button>
+            <button
+              onClick={() => setQuickPeriod('month')}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              30 Days
+            </button>
+          </div>
         </div>
       </div>
 
@@ -105,7 +209,12 @@ const Reports: React.FC = () => {
             ₱{(todaySales?.total_sales || 0).toFixed(2)}
           </h3>
           <p className="text-sm text-pet-gray-medium mt-1">Total Sales</p>
-          <p className="text-xs text-pet-orange mt-2">{period === 'today' ? 'Today' : `Last ${periodDays} days`}</p>
+          <p className="text-xs text-pet-orange mt-2">
+            {startDate === endDate 
+              ? formatDate(startDate)
+              : `${formatDate(startDate)} - ${formatDate(endDate)}`
+            }
+          </p>
         </div>
 
         <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">

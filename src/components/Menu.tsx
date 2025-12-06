@@ -153,36 +153,6 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
           to keep your furbabies happy and healthy!
         </p>
 
-        {/* Category Filter */}
-        <div className="max-w-4xl mx-auto mb-8">
-          <div className="flex items-center justify-center flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedCategoryFilter('all')}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 border-2 ${
-                selectedCategoryFilter === 'all'
-                  ? 'bg-pet-orange text-white border-pet-orange shadow-lg'
-                  : 'bg-white text-pet-brown border-pet-orange hover:bg-pet-beige'
-              }`}
-            >
-              All Categories
-            </button>
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => setSelectedCategoryFilter(category.id)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 border-2 flex items-center space-x-2 ${
-                  selectedCategoryFilter === category.id
-                    ? 'bg-pet-orange text-white border-pet-orange shadow-lg'
-                    : 'bg-white text-pet-brown border-pet-orange hover:bg-pet-beige'
-                }`}
-              >
-                <span>{category.icon}</span>
-                <span>{category.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Search Results Count */}
         {hasSearchResults && (
           <div className="text-sm text-pet-gray-medium mb-4">

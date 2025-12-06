@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { CartItem, PaymentMethod, ServiceType } from '../types';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
+import { posAPI } from '../lib/pos';
+import { useMenu } from '../hooks/useMenu';
 
 interface CheckoutProps {
   cartItems: CartItem[];
@@ -11,6 +13,7 @@ interface CheckoutProps {
 
 const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) => {
   const { paymentMethods } = usePaymentMethods();
+  const { menuItems } = useMenu();
   const [step, setStep] = useState<'details' | 'payment'>('details');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -24,6 +27,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
   const [notes, setNotes] = useState('');
   const [cashAmountPaid, setCashAmountPaid] = useState('');
   const [cashChangeNeeded, setCashChangeNeeded] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   React.useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -70,13 +74,88 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
     setStep('payment');
   };
 
-  const handlePlaceOrder = () => {
-    const timeInfo = serviceType === 'pickup' 
-      ? (pickupTime === 'custom' ? customTime : `${pickupTime} minutes`)
-      : '';
+  const handlePlaceOrder = async () => {
+    if (isProcessing) return;
     
-    const orderDetails = `
+    try {
+      setIsProcessing(true);
+      console.log('🛒 Starting order creation for website checkout...');
+      
+      // Prepare order items - calculate unit price per item (totalPrice already includes variations/add-ons)
+      const orderItems = cartItems.map(item => {
+        // For each cart item, the totalPrice is the price per unit (base + variations + add-ons)
+        // So unit_price should be totalPrice (it's already per unit)
+        const unitPrice = item.totalPrice;
+        
+        // Extract base menu_item_id from the unique cart item ID
+        // Cart item ID format: {menu_item_id}-{variation_id}-{addon_ids}
+        // We need just the base menu_item_id (UUID format: 8-4-4-4-12 = 36 chars)
+        let menuItemId = item.id;
+        if (item.id.includes('-default-') || item.id.includes('-')) {
+          // Try to extract UUID (first 36 characters if it starts with UUID)
+          // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+          const uuidMatch = item.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+          if (uuidMatch) {
+            menuItemId = uuidMatch[0];
+          } else {
+            // Fallback: try to find by name in menuItems
+            const menuItem = menuItems.find(mi => mi.name === item.name);
+            if (menuItem) {
+              menuItemId = menuItem.id;
+            } else {
+              // Last resort: use first part before first '-default-' or '-'
+              menuItemId = item.id.split('-default-')[0].split('-').slice(0, 5).join('-');
+            }
+          }
+        }
+        
+        return {
+          menu_item_id: menuItemId,
+          item_name: item.name,
+          unit_price: unitPrice,
+          quantity: item.quantity
+        };
+      });
+
+      // Create order in database
+      console.log('📝 Creating order in database...');
+      const order = await posAPI.createOrder({
+        order_type: serviceType, // 'pickup' or 'delivery'
+        customer_name: customerName,
+        customer_phone: contactNumber,
+        items: orderItems,
+        discount_amount: 0 // Add discount if needed
+      });
+
+      console.log('✅ Order created:', order.order_number);
+
+      // Create payment record
+      console.log('💳 Creating payment record...');
+      await posAPI.createPayment({
+        order_id: order.id,
+        payment_method: paymentMethod === 'cash' ? 'cash' : paymentMethod,
+        amount: finalTotal,
+        reference_number: referenceNumber || undefined
+      });
+
+      console.log('✅ Payment recorded');
+
+      // Complete the order immediately to trigger inventory updates
+      // This is what updates the stock according to the order
+      console.log('📦 Completing order to update inventory...');
+      await posAPI.completeOrder(order.id);
+
+      console.log('✅ Order completed - inventory updated!');
+      console.log('📊 Stock levels have been updated based on order:', order.order_number);
+
+      // Now prepare Messenger message with order details
+      const timeInfo = serviceType === 'pickup' 
+        ? (pickupTime === 'custom' ? customTime : `${pickupTime} minutes`)
+        : '';
+      
+      const orderDetails = `
 🛒 For Your Pets Only ORDER
+📦 Order #: ${order.order_number}
 
 👤 Customer: ${customerName}
 📞 Contact: ${contactNumber}
@@ -117,14 +196,25 @@ ${paymentMethod === 'cash'
 
 ${notes ? `📝 Notes: ${notes}` : ''}
 
+✅ Order #${order.order_number} has been recorded and inventory updated!
 Please confirm this order to proceed. Thank you for choosing For Your Pets Only! 🥟
-    `.trim();
+      `.trim();
 
-    const encodedMessage = encodeURIComponent(orderDetails);
-    const messengerUrl = `https://m.me/100310379306836?text=${encodedMessage}`;
-    
-    window.open(messengerUrl, '_blank');
-    
+      const encodedMessage = encodeURIComponent(orderDetails);
+      const messengerUrl = `https://m.me/100310379306836?text=${encodedMessage}`;
+      
+      // Open Messenger
+      window.open(messengerUrl, '_blank');
+      
+      // Show success message
+      alert(`✅ Order ${order.order_number} created successfully!\n\nStock levels have been updated.\nYou will now be redirected to Messenger.`);
+      
+    } catch (error: any) {
+      console.error('❌ Error creating order:', error);
+      alert(`Failed to create order: ${error.message}\n\nPlease try again or contact support.`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const isDetailsValid = customerName && contactNumber && 
@@ -585,14 +675,18 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
 
           <button
             onClick={handlePlaceOrder}
-            disabled={paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal)}
+            disabled={
+              isProcessing || 
+              (paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal))
+            }
             className={`w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${
-              paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal)
+              isProcessing || 
+              (paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal))
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-red-600 text-white hover:bg-red-700 hover:scale-[1.02]'
             }`}
           >
-            Place Order via Messenger
+            {isProcessing ? 'Processing Order...' : 'Place Order via Messenger'}
           </button>
           
           <p className="text-xs text-gray-500 text-center mt-3">
