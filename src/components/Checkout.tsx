@@ -196,18 +196,30 @@ ${paymentMethod === 'cash'
 
 ${notes ? `📝 Notes: ${notes}` : ''}
 
-✅ Order #${order.order_number} has been recorded and inventory updated!
 Please confirm this order to proceed. Thank you for choosing For Your Pets Only! 🥟
       `.trim();
 
       const encodedMessage = encodeURIComponent(orderDetails);
       const messengerUrl = `https://m.me/100310379306836?text=${encodedMessage}`;
       
-      // Open Messenger
-      window.open(messengerUrl, '_blank');
+      // Open Messenger immediately (before alert to avoid popup blocking)
+      const messengerWindow = window.open(messengerUrl, '_blank');
       
-      // Show success message
-      alert(`✅ Order ${order.order_number} created successfully!\n\nStock levels have been updated.\nYou will now be redirected to Messenger.`);
+      // Show success message after opening Messenger
+      setTimeout(() => {
+        alert(`✅ Order ${order.order_number} created successfully!\n\nStock levels have been updated.`);
+      }, 100);
+      
+      // If popup was blocked, show fallback with link
+      if (!messengerWindow || messengerWindow.closed || typeof messengerWindow.closed === 'undefined') {
+        setTimeout(() => {
+          alert(`✅ Order ${order.order_number} created successfully!\n\n⚠️ Messenger popup was blocked. Please click this link:\n\n${messengerUrl.substring(0, 50)}...`);
+          // Copy to clipboard if possible
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(messengerUrl);
+          }
+        }, 200);
+      }
       
     } catch (error: any) {
       console.error('❌ Error creating order:', error);
