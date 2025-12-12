@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3, Megaphone } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3, Megaphone, Search, Download } from 'lucide-react';
 import { MenuItem, Variation, AddOn, Announcement } from '../types';
 import { addOnCategories } from '../data/menuData';
 import { useMenu } from '../hooks/useMenu';
@@ -48,6 +48,8 @@ const AdminDashboard: React.FC = () => {
     expiryDate: undefined,
     internalNotes: undefined
   });
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleAddItem = () => {
     setCurrentView('add');
@@ -205,10 +207,10 @@ const AdminDashboard: React.FC = () => {
       const item = menuItems.find(i => i.id === id);
       return item ? item.name : 'Unknown Item';
     }).slice(0, 5); // Show first 5 items
-    
+
     const displayNames = itemNames.join(', ');
     const moreItems = selectedItems.length > 5 ? ` and ${selectedItems.length - 5} more items` : '';
-    
+
     if (confirm(`Are you sure you want to delete ${selectedItems.length} item(s)?\n\nItems to delete: ${displayNames}${moreItems}\n\nThis action cannot be undone.`)) {
       try {
         setIsProcessing(true);
@@ -255,8 +257,8 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleSelectItem = (itemId: string) => {
-    setSelectedItems(prev => 
-      prev.includes(itemId) 
+    setSelectedItems(prev =>
+      prev.includes(itemId)
         ? prev.filter(id => id !== itemId)
         : [...prev, itemId]
     );
@@ -327,15 +329,15 @@ const AdminDashboard: React.FC = () => {
   // Helper function to check if expiry date is close
   const getExpiryWarning = (expiryDate?: string) => {
     if (!expiryDate) return null;
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const expiry = new Date(expiryDate);
     expiry.setHours(0, 0, 0, 0);
-    
+
     const diffTime = expiry.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) {
       return { type: 'expired', days: Math.abs(diffDays), message: 'Expired' };
     } else if (diffDays <= 7) {
@@ -343,7 +345,7 @@ const AdminDashboard: React.FC = () => {
     } else if (diffDays <= 30) {
       return { type: 'warning', days: diffDays, message: `${diffDays} days left` };
     }
-    
+
     return null;
   };
 
@@ -355,6 +357,59 @@ const AdminDashboard: React.FC = () => {
     ...cat,
     count: menuItems.filter(item => item.category === cat.id).length
   }));
+
+  // Filter menu items based on search query
+  const filteredMenuItems = menuItems.filter(item => {
+    const query = searchQuery.toLowerCase();
+    const categoryName = categories.find(cat => cat.id === item.category)?.name.toLowerCase() || '';
+    return (
+      item.name.toLowerCase().includes(query) ||
+      item.description.toLowerCase().includes(query) ||
+      categoryName.includes(query)
+    );
+  });
+
+  const handleExport = () => {
+    // Define CSV headers
+    const headers = ['Name', 'Category', 'Base Price', 'Variations', 'Add-ons', 'Status', 'Popular', 'Expiry Date'];
+
+    // Convert data to CSV format
+    const csvData = filteredMenuItems.map(item => {
+      const categoryName = categories.find(cat => cat.id === item.category)?.name || 'Unknown';
+      const variationsCount = item.variations?.length || 0;
+      const addOnsCount = item.addOns?.length || 0;
+      const status = item.available ? 'Available' : 'Unavailable';
+      const popular = item.popular ? 'Yes' : 'No';
+      const expiry = item.expiryDate || 'N/A';
+
+      return [
+        `"${item.name.replace(/"/g, '""')}"`, // Escape quotes
+        `"${categoryName}"`,
+        item.basePrice,
+        variationsCount,
+        addOnsCount,
+        status,
+        popular,
+        expiry
+      ].join(',');
+    });
+
+    // Combine headers and data
+    const csvContent = [headers.join(','), ...csvData].join('\n');
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `menu_items_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -386,7 +441,7 @@ const AdminDashboard: React.FC = () => {
             <h1 className="text-2xl font-playfair font-semibold text-black">Admin Access</h1>
             <p className="text-gray-600 mt-2">Enter password to access the admin dashboard</p>
           </div>
-          
+
           <form onSubmit={handleLogin}>
             <div className="mb-6">
               <label className="block text-sm font-medium text-black mb-2">Password</label>
@@ -402,7 +457,7 @@ const AdminDashboard: React.FC = () => {
                 <p className="text-red-500 text-sm mt-2">{loginError}</p>
               )}
             </div>
-            
+
             <button
               type="submit"
               className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors duration-200 font-medium"
@@ -619,14 +674,13 @@ const AdminDashboard: React.FC = () => {
                   {(() => {
                     const expiryWarning = getExpiryWarning(formData.expiryDate);
                     return expiryWarning && (
-                      <div className={`mt-2 p-3 rounded-lg text-sm ${
-                        expiryWarning.type === 'expired'
-                          ? 'bg-red-50 border border-red-200 text-red-800'
-                          : expiryWarning.type === 'critical'
+                      <div className={`mt-2 p-3 rounded-lg text-sm ${expiryWarning.type === 'expired'
+                        ? 'bg-red-50 border border-red-200 text-red-800'
+                        : expiryWarning.type === 'critical'
                           ? 'bg-red-50 border border-red-200 text-red-800'
                           : 'bg-yellow-50 border border-yellow-200 text-yellow-800'
-                      }`}>
-                        <span className="font-medium">⚠️ Warning:</span> {expiryWarning.type === 'expired' 
+                        }`}>
+                        <span className="font-medium">⚠️ Warning:</span> {expiryWarning.type === 'expired'
                           ? `This item expired ${expiryWarning.days} day${expiryWarning.days !== 1 ? 's' : ''} ago`
                           : `Expiry date is approaching - ${expiryWarning.message}`
                         }
@@ -789,6 +843,23 @@ const AdminDashboard: React.FC = () => {
                     </button>
                   </div>
                 )}
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search items..."
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent w-64"
+                  />
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                </div>
+                <button
+                  onClick={handleExport}
+                  className="flex items-center space-x-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Export</span>
+                </button>
                 <button
                   onClick={handleAddItem}
                   className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors duration-200"
@@ -810,7 +881,7 @@ const AdminDashboard: React.FC = () => {
                   <h3 className="text-lg font-medium text-black mb-1">Bulk Actions</h3>
                   <p className="text-sm text-gray-600">{selectedItems.length} item(s) selected</p>
                 </div>
-                
+
                 <div className="flex flex-col sm:flex-row gap-3">
                   {/* Change Category */}
                   <div className="flex items-center space-x-2">
@@ -831,7 +902,7 @@ const AdminDashboard: React.FC = () => {
                       ))}
                     </select>
                   </div>
-                  
+
                   {/* Remove Items */}
                   <button
                     onClick={handleBulkRemove}
@@ -841,7 +912,7 @@ const AdminDashboard: React.FC = () => {
                     <Trash2 className="h-4 w-4" />
                     <span>{isProcessing ? 'Removing...' : 'Remove Selected'}</span>
                   </button>
-                  
+
                   {/* Clear Selection */}
                   <button
                     onClick={() => {
@@ -872,7 +943,7 @@ const AdminDashboard: React.FC = () => {
                         className="rounded border-gray-300 text-green-600 focus:ring-green-500"
                       />
                       <span className="text-sm font-medium text-gray-700">
-                        Select All ({menuItems.length} items)
+                        Select All ({filteredMenuItems.length} items)
                       </span>
                     </label>
                   </div>
@@ -911,7 +982,7 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {menuItems.map((item) => (
+                  {filteredMenuItems.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <input
@@ -953,13 +1024,12 @@ const AdminDashboard: React.FC = () => {
                           {(() => {
                             const expiryWarning = getExpiryWarning(item.expiryDate);
                             return expiryWarning && (
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                expiryWarning.type === 'expired'
-                                  ? 'bg-red-600 text-white'
-                                  : expiryWarning.type === 'critical'
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${expiryWarning.type === 'expired'
+                                ? 'bg-red-600 text-white'
+                                : expiryWarning.type === 'critical'
                                   ? 'bg-red-100 text-red-800'
                                   : 'bg-yellow-100 text-yellow-800'
-                              }`}>
+                                }`}>
                                 ⚠️ {expiryWarning.message}
                               </span>
                             );
@@ -969,11 +1039,10 @@ const AdminDashboard: React.FC = () => {
                               Popular
                             </span>
                           )}
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            item.available 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-red-100 text-red-800'
-                          }`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.available
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                            }`}>
                             {item.available ? 'Available' : 'Unavailable'}
                           </span>
                         </div>
@@ -1004,7 +1073,7 @@ const AdminDashboard: React.FC = () => {
 
             {/* Mobile Card View */}
             <div className="md:hidden">
-              {menuItems.map((item) => (
+              {filteredMenuItems.map((item) => (
                 <div key={item.id} className={`p-4 border-b border-gray-200 last:border-b-0 ${selectedItems.includes(item.id) ? 'bg-blue-50' : ''}`}>
                   <div className="flex items-center justify-between mb-3">
                     <label className="flex items-center space-x-2">
@@ -1033,14 +1102,14 @@ const AdminDashboard: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-gray-900 truncate">{item.name}</h3>
                       <p className="text-sm text-gray-500 mt-1 line-clamp-2">{item.description}</p>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-gray-500">Category:</span>
@@ -1070,19 +1139,18 @@ const AdminDashboard: React.FC = () => {
                       <span className="ml-1 text-gray-900">{item.addOns?.length || 0}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between mt-3">
                     <div className="flex flex-wrap items-center gap-2">
                       {(() => {
                         const expiryWarning = getExpiryWarning(item.expiryDate);
                         return expiryWarning && (
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            expiryWarning.type === 'expired'
-                              ? 'bg-red-600 text-white'
-                              : expiryWarning.type === 'critical'
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${expiryWarning.type === 'expired'
+                            ? 'bg-red-600 text-white'
+                            : expiryWarning.type === 'critical'
                               ? 'bg-red-100 text-red-800'
                               : 'bg-yellow-100 text-yellow-800'
-                          }`}>
+                            }`}>
                             ⚠️ {expiryWarning.message}
                           </span>
                         );
@@ -1092,11 +1160,10 @@ const AdminDashboard: React.FC = () => {
                           Popular
                         </span>
                       )}
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        item.available 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.available
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                        }`}>
                         {item.available ? 'Available' : 'Unavailable'}
                       </span>
                     </div>
@@ -1269,11 +1336,10 @@ const AdminDashboard: React.FC = () => {
                               <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getTypeColor()}`}>
                                 {announcement.type}
                               </span>
-                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                isActive
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}>
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${isActive
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                                }`}>
                                 {isActive ? 'Active' : 'Inactive'}
                               </span>
                             </div>

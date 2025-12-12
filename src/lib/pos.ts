@@ -78,7 +78,7 @@ export interface SalesSummary {
 
 export const posAPI = {
   // ==================== CUSTOMERS ====================
-  
+
   async getAllCustomers() {
     const { data, error } = await supabase
       .from('customers')
@@ -86,7 +86,7 @@ export const posAPI = {
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(100);
-    
+
     if (error) throw error;
     return data as Customer[];
   },
@@ -98,7 +98,7 @@ export const posAPI = {
       .ilike('phone', `%${phone}%`)
       .eq('is_active', true)
       .limit(10);
-    
+
     if (error) throw error;
     return data as Customer[];
   },
@@ -117,7 +117,7 @@ export const posAPI = {
     try {
       // Generate customer code
       const customerCode = `CUST-${Date.now().toString().slice(-6)}`;
-      
+
       // Prepare insert data, ensuring phone has a default value if not provided
       // Note: phone is NOT NULL in database, so we use empty string as default
       const insertData: any = {
@@ -125,7 +125,7 @@ export const posAPI = {
         name: customerData.name,
         phone: customerData.phone || '', // Default to empty string if not provided
       };
-      
+
       // Only add optional fields if they have values
       if (customerData.email) insertData.email = customerData.email;
       if (customerData.address) insertData.address = customerData.address;
@@ -135,18 +135,18 @@ export const posAPI = {
       if (customerData.pet_age) insertData.pet_age = customerData.pet_age;
       // Add note field if provided (requires migration 20250104000000_add_note_to_customers.sql)
       if (customerData.note) insertData.note = customerData.note;
-      
+
       const { data, error } = await supabase
         .from('customers')
         .insert([insertData])
         .select()
         .single();
-      
+
       if (error) {
         console.error('Create customer error:', error);
         throw new Error(`Failed to create customer: ${error.message}`);
       }
-      
+
       return data as Customer;
     } catch (error: any) {
       console.error('Create customer failed:', error);
@@ -172,12 +172,12 @@ export const posAPI = {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) {
         console.error('Update customer error:', error);
         throw new Error(`Failed to update customer: ${error.message}`);
       }
-      
+
       return data as Customer;
     } catch (error: any) {
       console.error('Update customer failed:', error);
@@ -192,12 +192,12 @@ export const posAPI = {
         .from('customers')
         .update({ is_active: false })
         .eq('id', id);
-      
+
       if (error) {
         console.error('Delete customer error:', error);
         throw new Error(`Failed to delete customer: ${error.message}`);
       }
-      
+
       return true;
     } catch (error: any) {
       console.error('Delete customer failed:', error);
@@ -206,20 +206,20 @@ export const posAPI = {
   },
 
   // ==================== STAFF ====================
-  
+
   async getAllStaff() {
     const { data, error } = await supabase
       .from('staff')
       .select('*')
       .eq('employment_status', 'active')
       .order('name');
-    
+
     if (error) throw error;
     return data as Staff[];
   },
 
   // ==================== ORDERS ====================
-  
+
   async createOrder(orderData: {
     customer_id?: string;
     staff_id?: string;
@@ -237,7 +237,7 @@ export const posAPI = {
     try {
       // Calculate totals
       const subtotal = orderData.items.reduce(
-        (sum, item) => sum + (item.unit_price * item.quantity), 
+        (sum, item) => sum + (item.unit_price * item.quantity),
         0
       );
       const discount = orderData.discount_amount || 0;
@@ -245,7 +245,7 @@ export const posAPI = {
 
       // Generate order number
       const orderNumber = `ORD-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-      
+
       console.log('Generated order number:', orderNumber);
 
       // Create order
@@ -301,7 +301,7 @@ export const posAPI = {
   async completeOrder(orderId: string) {
     try {
       console.log('Completing order:', orderId);
-      
+
       const { data, error } = await supabase
         .from('orders')
         .update({
@@ -318,7 +318,7 @@ export const posAPI = {
         console.error('Complete order error:', error);
         throw new Error(`Failed to complete order: ${error.message}`);
       }
-      
+
       console.log('Order completed:', data);
       return data as Order;
     } catch (error: any) {
@@ -331,7 +331,7 @@ export const posAPI = {
   async updateInventoryManual(menuItemId: string, quantitySold: number) {
     try {
       console.log('📦 Updating inventory for item:', menuItemId, 'Quantity sold:', quantitySold);
-      
+
       // First, check if inventory record exists
       const { data: inventory, error: fetchError } = await supabase
         .from('inventory')
@@ -367,7 +367,7 @@ export const posAPI = {
           console.error('❌ Create inventory error:', createError);
           return { success: false, error: createError.message };
         }
-        
+
         console.log('✅ Inventory record created with stock:', newInventory.current_stock);
         return { success: true, oldStock: 100, newStock: newInventory.current_stock };
       }
@@ -378,7 +378,7 @@ export const posAPI = {
       const minStock = inventory.minimum_stock || 10;
 
       console.log(`📊 Stock calculation: ${oldStock} - ${quantitySold} = ${newStock}`);
-      
+
       // Update inventory
       const { data: updated, error: updateError } = await supabase
         .from('inventory')
@@ -527,7 +527,7 @@ export const posAPI = {
       console.log(`📊 Found ${existingInventory?.length || 0} existing inventory records`);
 
       const existingItemIds = new Set(existingInventory?.map(inv => inv.menu_item_id) || []);
-      
+
       // Find items without inventory
       const missingInventory = menuItems?.filter(item => !existingItemIds.has(item.id)) || [];
 
@@ -592,7 +592,7 @@ export const posAPI = {
       if (error) throw error;
 
       let updated = 0;
-      
+
       // Update inventory where unit_cost is 0 or null
       for (const inv of inventory || []) {
         if (!inv.unit_cost || inv.unit_cost === 0) {
@@ -657,7 +657,7 @@ export const posAPI = {
     // Set end date to end of day (23:59:59)
     const endDateTime = new Date(endDate);
     endDateTime.setHours(23, 59, 59, 999);
-    
+
     const { data, error } = await supabase
       .from('orders')
       .select(`
@@ -735,7 +735,7 @@ export const posAPI = {
         .eq('id', orderId);
 
       if (updateError) throw updateError;
-      
+
       return { success: true };
     } catch (error: any) {
       console.error('Error marking order as paid:', error);
@@ -744,7 +744,7 @@ export const posAPI = {
   },
 
   // ==================== PAYMENTS ====================
-  
+
   async createPayment(paymentData: {
     order_id: string;
     payment_method: string;
@@ -753,7 +753,7 @@ export const posAPI = {
   }) {
     // Generate payment number
     const paymentNumber = `PAY-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-    
+
     const { data, error } = await supabase
       .from('payments')
       .insert([{
@@ -772,7 +772,7 @@ export const posAPI = {
   },
 
   // ==================== INVENTORY ====================
-  
+
   async getInventory() {
     const { data, error } = await supabase
       .from('inventory')
@@ -824,7 +824,7 @@ export const posAPI = {
   },
 
   // ==================== ANALYTICS ====================
-  
+
   async getDailySales(date?: string) {
     try {
       const targetDate = date || new Date().toISOString().split('T')[0];
@@ -922,6 +922,50 @@ export const posAPI = {
     } catch (error: any) {
       console.error('getPaymentMethodBreakdown failed:', error);
       return [];
+    }
+  },
+
+  async resetOrderHistory() {
+    try {
+      console.log('⚠️ RESETTING ORDER HISTORY...');
+
+      // 1. Delete all order items (usually cascades, but being safe)
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+      if (itemsError) throw itemsError;
+
+      // 2. Delete all payments
+      const { error: paymentsError } = await supabase
+        .from('payments')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+      if (paymentsError) throw paymentsError;
+
+      // 3. Delete stock movements related to orders
+      const { error: movementsError } = await supabase
+        .from('stock_movements')
+        .delete()
+        .not('order_id', 'is', null);
+
+      if (movementsError) throw movementsError;
+
+      // 4. Delete all orders
+      const { error: ordersError } = await supabase
+        .from('orders')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+      if (ordersError) throw ordersError;
+
+      console.log('✅ Order history reset successfully');
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Reset order history failed:', error);
+      throw error;
     }
   }
 };
