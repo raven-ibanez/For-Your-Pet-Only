@@ -10,7 +10,7 @@ export const useMenu = () => {
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch menu items with their variations, add-ons, and inventory
       const { data: items, error: itemsError } = await supabase
         .from('menu_items')
@@ -21,7 +21,8 @@ export const useMenu = () => {
           inventory (
             current_stock,
             is_tracked,
-            is_out_of_stock
+            is_out_of_stock,
+            sku
           )
         `)
         .order('created_at', { ascending: true });
@@ -33,17 +34,17 @@ export const useMenu = () => {
         const now = new Date();
         const discountStart = item.discount_start_date ? new Date(item.discount_start_date) : null;
         const discountEnd = item.discount_end_date ? new Date(item.discount_end_date) : null;
-        
-        const isDiscountActive = item.discount_active && 
-          (!discountStart || now >= discountStart) && 
+
+        const isDiscountActive = item.discount_active &&
+          (!discountStart || now >= discountStart) &&
           (!discountEnd || now <= discountEnd);
-        
+
         // Calculate effective price
         const effectivePrice = isDiscountActive && item.discount_price ? item.discount_price : item.base_price;
 
         // Get inventory data (can be array or single object)
-        const inventory = Array.isArray(item.inventory) 
-          ? item.inventory[0] 
+        const inventory = Array.isArray(item.inventory)
+          ? item.inventory[0]
           : item.inventory;
 
         // Determine availability: if tracked and out of stock, mark as unavailable
@@ -57,6 +58,7 @@ export const useMenu = () => {
           description: item.description,
           basePrice: item.base_price,
           category: item.category,
+          sku: inventory?.sku || undefined,
           popular: item.popular,
           available: finalAvailable,
           image: item.image_url || undefined,
@@ -148,6 +150,26 @@ export const useMenu = () => {
         if (addOnsError) throw addOnsError;
       }
 
+      // Create inventory record with SKU
+      // Note: We explicitly create this since there might not be a trigger
+      const { error: inventoryError } = await supabase
+        .from('inventory')
+        .insert({
+          menu_item_id: menuItem.id,
+          current_stock: 0,
+          minimum_stock: 10,
+          is_tracked: true,
+          is_out_of_stock: true,
+          sku: item.sku || null
+        });
+
+      if (inventoryError) {
+        console.error('Failed to create inventory record:', inventoryError);
+        // We don't throw here to avoid rolling back the menu item creation, 
+        // but arguably we should. For now, just log. 
+        // If we threw, we'd need to delete the menu item to be atomic-ish.
+      }
+
       await fetchMenuItems();
       return menuItem;
     } catch (err) {
@@ -211,6 +233,16 @@ export const useMenu = () => {
           );
 
         if (addOnsError) throw addOnsError;
+      }
+
+      // Update inventory SKU if provided
+      if (updates.sku !== undefined) {
+        const { error: inventoryError } = await supabase
+          .from('inventory')
+          .update({ sku: updates.sku || null })
+          .eq('menu_item_id', id);
+
+        if (inventoryError) console.error('Error updating SKU:', inventoryError);
       }
 
       await fetchMenuItems();

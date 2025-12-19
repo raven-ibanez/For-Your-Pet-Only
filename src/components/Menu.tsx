@@ -33,7 +33,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
       // Preload images for visible category first
       const visibleItems = menuItems.filter(item => item.category === activeCategory);
       preloadImages(visibleItems);
-      
+
       // Then preload other images after a short delay
       setTimeout(() => {
         const otherItems = menuItems.filter(item => item.category !== activeCategory);
@@ -50,7 +50,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
       const mobileNavHeight = 60; // Mobile nav height
       const offset = headerHeight + mobileNavHeight + 20; // Extra padding
       const elementPosition = element.offsetTop - offset;
-      
+
       window.scrollTo({
         top: elementPosition,
         behavior: 'smooth'
@@ -102,10 +102,11 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
       filtered = filtered.filter(item => {
         const category = categories.find(cat => cat.id === item.category);
         const categoryName = category?.name.toLowerCase() || '';
-        
+
         return (
           item.name.toLowerCase().includes(searchLower) ||
           item.description.toLowerCase().includes(searchLower) ||
+          (item.sku || '').toLowerCase().includes(searchLower) ||
           categoryName.includes(searchLower)
         );
       });
@@ -146,86 +147,86 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="text-center mb-8">
-        <h2 className="text-4xl font-display font-bold text-pet-orange-dark mb-4">Our Products 🐾</h2>
-        <p className="text-pet-gray-dark text-lg max-w-2xl mx-auto mb-6">
-          Browse our carefully curated selection of premium pet supplies, toys, treats, and essentials 
-          to keep your furbabies happy and healthy!
-        </p>
+        <div className="text-center mb-8">
+          <h2 className="text-4xl font-display font-bold text-pet-orange-dark mb-4">Our Products 🐾</h2>
+          <p className="text-pet-gray-dark text-lg max-w-2xl mx-auto mb-6">
+            Browse our carefully curated selection of premium pet supplies, toys, treats, and essentials
+            to keep your furbabies happy and healthy!
+          </p>
 
-        {/* Search Results Count */}
-        {hasSearchResults && (
-          <div className="text-sm text-pet-gray-medium mb-4">
-            Found {filteredItems.length} product{filteredItems.length !== 1 ? 's' : ''} matching "{searchTerm}"
-          </div>
-        )}
-      </div>
+          {/* Search Results Count */}
+          {hasSearchResults && (
+            <div className="text-sm text-pet-gray-medium mb-4">
+              Found {filteredItems.length} product{filteredItems.length !== 1 ? 's' : ''} matching "{searchTerm}"
+            </div>
+          )}
+        </div>
 
-      {/* Display Results */}
-      {hasSearchResults ? (
-        // Search Results View
-        filteredItems.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredItems.map((item) => {
-              const cartItem = cartItems.find(cartItem => cartItem.id === item.id);
-              return (
-                <MenuItemCard
-                  key={item.id}
-                  item={item}
-                  onAddToCart={addToCart}
-                  quantity={cartItem?.quantity || 0}
-                  onUpdateQuantity={updateQuantity}
-                />
-              );
-            })}
-          </div>
+        {/* Display Results */}
+        {hasSearchResults ? (
+          // Search Results View
+          filteredItems.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredItems.map((item) => {
+                const cartItem = cartItems.find(cartItem => cartItem.id === item.id);
+                return (
+                  <MenuItemCard
+                    key={item.id}
+                    item={item}
+                    onAddToCart={addToCart}
+                    quantity={cartItem?.quantity || 0}
+                    onUpdateQuantity={updateQuantity}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg mb-2">No products found</p>
+              <p className="text-gray-400 text-sm mb-4">Try a different search term or category</p>
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCategoryFilter('all');
+                }}
+                className="text-pet-orange hover:text-pet-orange-dark font-semibold"
+              >
+                Clear search
+              </button>
+            </div>
+          )
         ) : (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg mb-2">No products found</p>
-            <p className="text-gray-400 text-sm mb-4">Try a different search term or category</p>
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setSelectedCategoryFilter('all');
-              }}
-              className="text-pet-orange hover:text-pet-orange-dark font-semibold"
-            >
-              Clear search
-            </button>
-          </div>
-        )
-      ) : (
-        // Category View (Original Layout)
-        categories.map((category) => {
-          const categoryItems = menuItems.filter(item => item.category === category.id);
-          
-          if (categoryItems.length === 0) return null;
-          
-          return (
-            <section key={category.id} id={category.id} className="mb-16">
-              <div className="flex items-center mb-8 pb-4 border-b-2 border-pet-orange">
-                <span className="text-4xl mr-3">{category.icon}</span>
-                <h3 className="text-3xl font-display font-bold text-pet-orange-dark">{category.name}</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {categoryItems.map((item) => {
-                  const cartItem = cartItems.find(cartItem => cartItem.id === item.id);
-                  return (
-                    <MenuItemCard
-                      key={item.id}
-                      item={item}
-                      onAddToCart={addToCart}
-                      quantity={cartItem?.quantity || 0}
-                      onUpdateQuantity={updateQuantity}
-                    />
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })
-      )}
+          // Category View (Original Layout)
+          categories.map((category) => {
+            const categoryItems = menuItems.filter(item => item.category === category.id);
+
+            if (categoryItems.length === 0) return null;
+
+            return (
+              <section key={category.id} id={category.id} className="mb-16">
+                <div className="flex items-center mb-8 pb-4 border-b-2 border-pet-orange">
+                  <span className="text-4xl mr-3">{category.icon}</span>
+                  <h3 className="text-3xl font-display font-bold text-pet-orange-dark">{category.name}</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {categoryItems.map((item) => {
+                    const cartItem = cartItems.find(cartItem => cartItem.id === item.id);
+                    return (
+                      <MenuItemCard
+                        key={item.id}
+                        item={item}
+                        onAddToCart={addToCart}
+                        quantity={cartItem?.quantity || 0}
+                        onUpdateQuantity={updateQuantity}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })
+        )}
       </main>
     </>
   );

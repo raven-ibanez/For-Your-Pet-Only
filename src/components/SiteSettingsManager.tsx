@@ -17,6 +17,15 @@ const SiteSettingsManager: React.FC = () => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
   const [isResetting, setIsResetting] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetOptions, setResetOptions] = useState({
+    orders: false,
+    cashLedger: false,
+    creditLedger: false,
+    paymentLedger: false,
+    customerList: false,
+    expenses: false
+  });
 
   React.useEffect(() => {
     if (siteSettings) {
@@ -107,20 +116,81 @@ const SiteSettingsManager: React.FC = () => {
 
 
 
-  const handleResetHistory = async () => {
-    if (confirm('⚠️ DANGER: Are you sure you want to delete ALL order history?\n\nThis will permanently delete:\n- All orders\n- All payments\n- All order-related stock movements\n\nThis action CANNOT be undone.')) {
-      if (confirm('Double Check: Are you absolutely sure? This is intended for system cleanup before deployment.')) {
-        try {
-          setIsResetting(true);
-          await posAPI.resetOrderHistory();
-          alert('✅ System history has been successfully reset.');
-        } catch (error) {
-          console.error('Reset failed:', error);
-          alert('Failed to reset history. Please check console for details.');
-        } finally {
-          setIsResetting(false);
+
+  const handleOpenResetModal = () => {
+    setShowResetModal(true);
+  };
+
+  const handleResetOptionChange = (key: keyof typeof resetOptions) => {
+    setResetOptions(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const executeReset = async () => {
+    // Basic validation
+    if (!Object.values(resetOptions).some(v => v)) {
+      alert('Please select at least one item to reset.');
+      return;
+    }
+
+    if (!confirm('FINAL WARNING: The selected data will be permanently erased. Are you sure?')) {
+      return;
+    }
+
+    try {
+      setIsResetting(true);
+
+      const tasks = [];
+
+      // 1. Orders
+      if (resetOptions.orders) {
+        tasks.push(posAPI.resetOrders());
+      }
+
+      // 2. Ledgers (Payments)
+      if (resetOptions.paymentLedger) {
+        // If "Payment Ledger" is checked, it covers everything, so just reset all payments
+        tasks.push(posAPI.resetPayments());
+      } else {
+        // Granular payment resets
+        if (resetOptions.cashLedger) {
+          tasks.push(posAPI.resetPaymentsByMethod('cash'));
+        }
+        if (resetOptions.creditLedger) {
+          tasks.push(posAPI.resetPaymentsByMethod('credit'));
         }
       }
+
+      // 3. Customers
+      if (resetOptions.customerList) {
+        tasks.push(posAPI.resetCustomers());
+      }
+
+      // 4. Expenses (Placeholder)
+      if (resetOptions.expenses) {
+        tasks.push(posAPI.resetExpenses());
+      }
+
+      await Promise.all(tasks);
+
+      alert('✅ Selected data has been successfully reset.');
+      setShowResetModal(false);
+      // Reset options
+      setResetOptions({
+        orders: false,
+        cashLedger: false,
+        creditLedger: false,
+        paymentLedger: false,
+        customerList: false,
+        expenses: false
+      });
+    } catch (error) {
+      console.error('Reset failed:', error);
+      alert('Failed to reset selected data. Check console for details.');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -290,7 +360,7 @@ const SiteSettingsManager: React.FC = () => {
             <strong>This action cannot be undone.</strong>
           </p>
           <button
-            onClick={handleResetHistory}
+            onClick={handleOpenResetModal}
             disabled={isResetting}
             className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
           >
@@ -308,6 +378,76 @@ const SiteSettingsManager: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Reset Modal Overlay */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-white p-6 pb-2">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-2xl font-bold text-red-500">Reset Warning</h3>
+                <AlertTriangle className="h-8 w-8 text-red-500" />
+              </div>
+              <p className="text-gray-600 text-sm">
+                Warning! This will erase the selected data permanently. Make sure you have an internet connection to continue.
+              </p>
+            </div>
+
+            {/* Options */}
+            <div className="px-6 py-2 space-y-3">
+              {[
+                { key: 'orders', label: 'Orders' },
+                { key: 'cashLedger', label: 'Cash Ledger' },
+                { key: 'creditLedger', label: 'Credit Ledger' },
+                { key: 'paymentLedger', label: 'Payment Ledger' },
+                { key: 'customerList', label: 'Customer List' },
+                { key: 'expenses', label: 'Expenses' },
+              ].map((option) => (
+                <div key={option.key} className="flex items-center justify-between">
+                  <span className="font-bold text-gray-800">{option.label}</span>
+                  <div className="flex items-center space-x-3">
+                    <span className="text-green-500 font-semibold text-sm">Safe</span>
+                    <input
+                      type="checkbox"
+                      checked={(resetOptions as any)[option.key]}
+                      onChange={() => handleResetOptionChange(option.key as keyof typeof resetOptions)}
+                      className="w-5 h-5 border-2 border-gray-300 rounded focus:ring-purple-500 text-purple-600"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 flex items-center justify-between space-x-4">
+              <button
+                onClick={() => setShowResetModal(false)}
+                className="text-gray-600 font-semibold hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeReset}
+                className="bg-purple-700 hover:bg-purple-800 text-white px-6 py-3 rounded-lg font-bold flex items-center space-x-2 shadow-lg transition-transform transform active:scale-95"
+                disabled={isResetting}
+              >
+                {isResetting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>RESETTING...</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                    <span>Hard Reset</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

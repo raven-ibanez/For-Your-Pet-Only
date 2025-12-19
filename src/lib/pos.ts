@@ -926,6 +926,9 @@ export const posAPI = {
   },
 
   async resetOrderHistory() {
+    // Kept for backward compatibility or "Reset All" functionality if needed, 
+    // but effectively we can reuse granular functions or keep this as the "nuclear option".
+    // For this task, I will keep it but also expose granular ones.
     try {
       console.log('⚠️ RESETTING ORDER HISTORY...');
 
@@ -967,6 +970,98 @@ export const posAPI = {
       console.error('❌ Reset order history failed:', error);
       throw error;
     }
+  },
+
+  // ==================== GRANULAR RESET FUNCTIONS ====================
+
+  async resetCustomers() {
+    try {
+      console.log('⚠️ RESETTING CUSTOMERS...');
+      const { error } = await supabase
+        .from('customers')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+      if (error) throw error;
+      console.log('✅ Customers reset successfully');
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Reset customers failed:', error);
+      throw error;
+    }
+  },
+
+  async resetPayments() {
+    try {
+      console.log('⚠️ RESETTING ALL PAYMENTS...');
+      const { error } = await supabase
+        .from('payments')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) throw error;
+      console.log('✅ All payments reset successfully');
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Reset payments failed:', error);
+      throw error;
+    }
+  },
+
+  async resetPaymentsByMethod(method: string) {
+    try {
+      console.log(`⚠️ RESETTING PAYMENTS (${method})...`);
+      const { error } = await supabase
+        .from('payments')
+        .delete()
+        .ilike('payment_method', `%${method}%`);
+
+      if (error) throw error;
+      console.log(`✅ Payments (${method}) reset successfully`);
+      return { success: true };
+    } catch (error: any) {
+      console.error(`❌ Reset payments (${method}) failed:`, error);
+      throw error;
+    }
+  },
+
+  async resetOrders() {
+    try {
+      console.log('⚠️ RESETTING ORDERS...');
+
+      // 1. Delete order items
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (itemsError) throw itemsError;
+
+      // 2. Delete stock movements related to orders
+      const { error: movementsError } = await supabase
+        .from('stock_movements')
+        .delete()
+        .not('order_id', 'is', null);
+      if (movementsError) throw movementsError;
+
+      // 3. Delete orders
+      const { error: ordersError } = await supabase
+        .from('orders')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (ordersError) throw ordersError;
+
+      console.log('✅ Orders reset successfully');
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Reset orders failed:', error);
+      throw error;
+    }
+  },
+
+  async resetExpenses() {
+    // Placeholder for future implementation
+    console.log('⚠️ Expense tracking not yet implemented, skipping reset.');
+    return { success: true, message: 'No expenses to reset' };
   }
 };
 

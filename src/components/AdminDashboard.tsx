@@ -39,6 +39,7 @@ const AdminDashboard: React.FC = () => {
     description: '',
     basePrice: 0,
     category: 'hot-coffee',
+    sku: '',
     popular: false,
     available: true,
     variations: [],
@@ -59,6 +60,7 @@ const AdminDashboard: React.FC = () => {
       description: '',
       basePrice: 0,
       category: defaultCategory,
+      sku: '',
       popular: false,
       available: true,
       variations: [],
@@ -365,13 +367,14 @@ const AdminDashboard: React.FC = () => {
     return (
       item.name.toLowerCase().includes(query) ||
       item.description.toLowerCase().includes(query) ||
+      (item.sku || '').toLowerCase().includes(query) ||
       categoryName.includes(query)
     );
   });
 
   const handleExport = () => {
     // Define CSV headers
-    const headers = ['Name', 'Category', 'Base Price', 'Variations', 'Add-ons', 'Status', 'Popular', 'Expiry Date'];
+    const headers = ['Name', 'Category', 'SKU', 'Base Price', 'Variations', 'Add-ons', 'Status', 'Popular', 'Expiry Date'];
 
     // Convert data to CSV format
     const csvData = filteredMenuItems.map(item => {
@@ -385,6 +388,7 @@ const AdminDashboard: React.FC = () => {
       return [
         `"${item.name.replace(/"/g, '""')}"`, // Escape quotes
         `"${categoryName}"`,
+        `"${item.sku || ''}"`,
         item.basePrice,
         variationsCount,
         addOnsCount,
@@ -531,6 +535,17 @@ const AdminDashboard: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
                   placeholder="Enter item name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">SKU</label>
+                <input
+                  type="text"
+                  value={formData.sku || ''}
+                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  placeholder="Enter SKU (optional)"
                 />
               </div>
 
@@ -808,7 +823,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </div >
     );
   }
 
