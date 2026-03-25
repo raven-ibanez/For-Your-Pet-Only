@@ -11,6 +11,13 @@ import PaymentMethodManager from './PaymentMethodManager';
 import SiteSettingsManager from './SiteSettingsManager';
 import POSDashboard from './POSDashboard';
 
+const formatForInput = (dateString?: string | null) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 const AdminDashboard: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('beracah_admin_auth') === 'true';
@@ -150,8 +157,8 @@ const AdminDashboard: React.FC = () => {
       message: announcement.message,
       type: announcement.type,
       active: announcement.active,
-      start_date: announcement.start_date || '',
-      end_date: announcement.end_date || ''
+      start_date: formatForInput(announcement.start_date),
+      end_date: formatForInput(announcement.end_date)
     });
     setCurrentView('announcements-edit');
   };

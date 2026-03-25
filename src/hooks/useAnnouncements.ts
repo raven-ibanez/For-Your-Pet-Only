@@ -52,8 +52,8 @@ export const useAnnouncements = () => {
           message: announcement.message,
           type: announcement.type,
           active: announcement.active,
-          start_date: announcement.start_date || null,
-          end_date: announcement.end_date || null
+          start_date: announcement.start_date ? new Date(announcement.start_date).toISOString() : null,
+          end_date: announcement.end_date ? new Date(announcement.end_date).toISOString() : null
         })
         .select()
         .single();
@@ -77,8 +77,8 @@ export const useAnnouncements = () => {
           message: updates.message,
           type: updates.type,
           active: updates.active,
-          start_date: updates.start_date || null,
-          end_date: updates.end_date || null
+          start_date: updates.start_date ? new Date(updates.start_date).toISOString() : null,
+          end_date: updates.end_date ? new Date(updates.end_date).toISOString() : null
         })
         .eq('id', id);
 

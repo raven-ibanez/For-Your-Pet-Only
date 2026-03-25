@@ -30,7 +30,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     // Use effective price (discounted or regular) as base
     let price = item.effectivePrice || item.basePrice;
     if (selectedVariation) {
-      price = (item.effectivePrice || item.basePrice) + selectedVariation.price;
+      price = selectedVariation.price;
     }
     selectedAddOns.forEach(addOn => {
       price += addOn.price * addOn.quantity;
@@ -157,12 +157,12 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
         onClick={handleCardClick}
       >
         {/* Image Container with Badges */}
-        <div className="relative h-48 bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="relative aspect-[4/5] bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
           {item.image ? (
             <img
               src={item.image}
               alt={item.name}
-              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105 cursor-pointer"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 cursor-pointer"
               loading="lazy"
               decoding="async"
               onClick={(e) => {
@@ -355,7 +355,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                           <span className="font-medium text-gray-900">{variation.name}</span>
                         </div>
                         <span className="text-pet-brown font-semibold">
-                          ₱{((item.effectivePrice || item.basePrice) + variation.price).toFixed(2)}
+                          ₱{variation.price.toFixed(2)}
                         </span>
                       </label>
                     ))}
