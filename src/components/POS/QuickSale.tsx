@@ -41,6 +41,7 @@ const QuickSale: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastOrderNumber, setLastOrderNumber] = useState('');
   const [lastOrderData, setLastOrderData] = useState<ReceiptData | null>(null);
+  const [selectedProductForVariations, setSelectedProductForVariations] = useState<any | null>(null);
 
   const filteredProducts = menuItems.filter(item => {
     // Filter by category
@@ -129,6 +130,12 @@ const QuickSale: React.FC = () => {
       return;
     }
     
+    // If product has variations, open selection modal
+    if (product.variations && product.variations.length > 0) {
+      setSelectedProductForVariations(product);
+      return;
+    }
+    
     // Check stock availability
     if (product.isTracked && product.currentStock !== undefined) {
       if (product.currentStock <= 0) {
@@ -165,6 +172,41 @@ const QuickSale: React.FC = () => {
     }
   };
 
+  const handleSelectVariation = (product: any, variation: any) => {
+    const cartItemId = `${product.id}-${variation.id}`;
+    const cartItemName = `${product.name} (${variation.name})`;
+    const price = variation.price;
+    
+    // Check stock constraints using base product ID
+    if (product.isTracked && product.currentStock !== undefined) {
+      const existingItemsOfProduct = cart.filter(item => item.id.startsWith(product.id));
+      const totalQtyInCart = existingItemsOfProduct.reduce((sum, item) => sum + item.quantity, 0);
+      
+      if (totalQtyInCart + 1 > product.currentStock) {
+        alert(`Sorry, only ${product.currentStock} units available in total for ${product.name}.`);
+        return;
+      }
+    }
+    
+    const existingItem = cart.find(item => item.id === cartItemId);
+    if (existingItem) {
+      setCart(cart.map(item =>
+        item.id === cartItemId
+          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * price }
+          : item
+      ));
+    } else {
+      setCart([...cart, {
+        id: cartItemId,
+        name: cartItemName,
+        price: price,
+        quantity: 1,
+        total: price
+      }]);
+    }
+    setSelectedProductForVariations(null);
+  };
+
   const updateQuantity = (id: string, change: number) => {
     setCart(cart.map(item => {
       if (item.id === id) {
@@ -172,14 +214,16 @@ const QuickSale: React.FC = () => {
         
         // Check stock availability when increasing quantity
         if (change > 0) {
-          const product = menuItems.find(p => p.id === id);
+          const baseProductId = id.includes('-') ? id.split('-')[0] : id;
+          const product = menuItems.find(p => p.id === baseProductId);
           if (product?.isTracked && product.currentStock !== undefined) {
-            if (product.currentStock <= 0) {
-              alert(`Sorry, ${product.name} is out of stock.`);
-              return item;
-            }
-            if (newQuantity > product.currentStock) {
-              alert(`Sorry, only ${product.currentStock} ${product.currentStock === 1 ? 'piece' : 'pieces'} available for ${product.name}.`);
+            const existingItemsOfProduct = cart.filter(item => item.id.startsWith(product.id));
+            const totalQtyInCart = existingItemsOfProduct.reduce((sum, item) => 
+              item.id === id ? sum + newQuantity : sum + item.quantity
+            , 0);
+            
+            if (totalQtyInCart > product.currentStock) {
+              alert(`Sorry, only ${product.currentStock} units available in total for ${product.name}.`);
               return item;
             }
           }
@@ -208,16 +252,36 @@ const QuickSale: React.FC = () => {
     return parseFloat(deliveryFee) || 0;
   };
 
+  const calculateQRPHFee = () => {
+    if (useMultiPayment) {
+      const qrphAmount = multiPayments
+        .filter(p => p.method === 'qrph')
+        .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      return qrphAmount * 0.01;
+    }
+    if (paymentMethod === 'qrph') {
+      const subtotal = calculateSubtotal();
+      const discountAmount = calculateDiscount();
+      const deliveryFeeAmount = calculateDeliveryFee();
+      const baseTotal = Math.max(0, subtotal - discountAmount + deliveryFeeAmount);
+      return baseTotal * 0.01;
+    }
+    return 0;
+  };
+
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
     const discountAmount = calculateDiscount();
     const deliveryFeeAmount = calculateDeliveryFee();
-    return Math.max(0, subtotal - discountAmount + deliveryFeeAmount);
+    const baseTotal = Math.max(0, subtotal - discountAmount + deliveryFeeAmount);
+    return baseTotal + calculateQRPHFee();
   };
 
   const calculateMultiPaymentTotal = () => {
     return multiPayments.reduce((sum, payment) => {
-      return sum + (parseFloat(payment.amount) || 0);
+      const amount = parseFloat(payment.amount) || 0;
+      const fee = payment.method === 'qrph' ? amount * 0.01 : 0;
+      return sum + amount + fee;
     }, 0);
   };
 
@@ -230,7 +294,11 @@ const QuickSale: React.FC = () => {
         const total = calculateTotal();
         const otherPayments = multiPayments
           .filter(p => p.method !== 'cash')
-          .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+          .reduce((sum, p) => {
+            const amount = parseFloat(p.amount) || 0;
+            const fee = p.method === 'qrph' ? amount * 0.01 : 0;
+            return sum + amount + fee;
+          }, 0);
         const cashNeeded = total - otherPayments;
         return Math.max(0, cashAmount - cashNeeded);
       }
@@ -322,12 +390,17 @@ const QuickSale: React.FC = () => {
         order_type: 'in-store',
         customer_name: customerName,
         customer_phone: customerPhone || undefined,
-        items: cart.map(item => ({
-          menu_item_id: item.id,
-          item_name: item.name,
-          unit_price: item.price,
-          quantity: item.quantity
-        })),
+        items: cart.map(item => {
+          const baseProductId = item.id.includes('-') && item.id.split('-').length > 5
+            ? item.id.split('-').slice(0, 5).join('-')
+            : item.id;
+          return {
+            menu_item_id: baseProductId,
+            item_name: item.name,
+            unit_price: item.price,
+            quantity: item.quantity
+          };
+        }),
         discount_amount: calculateDiscount()
       });
 
@@ -341,12 +414,13 @@ const QuickSale: React.FC = () => {
           for (const payment of multiPayments) {
             const amount = parseFloat(payment.amount) || 0;
             if (amount > 0) {
+              const finalAmount = payment.method === 'qrph' ? amount * 1.01 : amount;
               await posAPI.createPayment({
                 order_id: order.id,
                 payment_method: payment.method,
-                amount: amount
+                amount: finalAmount
               });
-              console.log(`Payment recorded: ${payment.method} - ₱${amount.toFixed(2)}`);
+              console.log(`Payment recorded: ${payment.method} - ₱${finalAmount.toFixed(2)}`);
             }
           }
           console.log('All payments recorded');
@@ -398,10 +472,25 @@ const QuickSale: React.FC = () => {
       console.log('📊 Checking stock levels before sale...');
       const stockBefore: { [key: string]: number } = {};
       for (const item of cart) {
-        const product = menuItems.find(p => p.id === item.id);
-        // Only check inventory for tracked items
-        if (product?.isTracked) {
-          const inv = await posAPI.getInventoryForItem(item.id);
+        const isVariation = item.id.includes('-') && item.id.split('-').length > 5;
+        const baseProductId = isVariation
+          ? item.id.split('-').slice(0, 5).join('-')
+          : item.id;
+        const variationId = isVariation ? item.id.split('-').slice(5).join('-') : null;
+        
+        const product = menuItems.find(p => p.id === baseProductId);
+        
+        if (isVariation && variationId) {
+          // Fetch variation stock level
+          const { data: vData } = await supabase
+            .from('variations')
+            .select('stock_on_hand')
+            .eq('id', variationId)
+            .single();
+          stockBefore[item.id] = vData?.stock_on_hand || 0;
+          console.log(`Before sale (variation) - ${item.name}: ${stockBefore[item.id]} units`);
+        } else if (product?.isTracked) {
+          const inv = await posAPI.getInventoryForItem(baseProductId);
           stockBefore[item.id] = inv?.current_stock || 0;
           console.log(`Before sale - ${item.name}: ${stockBefore[item.id]} units`);
         } else {
@@ -439,10 +528,34 @@ const QuickSale: React.FC = () => {
       // Check if inventory was updated correctly (only for tracked items)
       console.log('📊 Verifying inventory updates...');
       for (const item of cart) {
-        const product = menuItems.find(p => p.id === item.id);
-        // Only verify/update inventory for tracked items
-        if (product?.isTracked) {
-          const inv = await posAPI.getInventoryForItem(item.id);
+        const isVariation = item.id.includes('-') && item.id.split('-').length > 5;
+        const baseProductId = isVariation
+          ? item.id.split('-').slice(0, 5).join('-')
+          : item.id;
+        const variationId = isVariation ? item.id.split('-').slice(5).join('-') : null;
+        
+        const product = menuItems.find(p => p.id === baseProductId);
+        
+        if (isVariation && variationId) {
+          const expectedStock = stockBefore[item.id] - item.quantity;
+          const correctedStock = Math.max(0, expectedStock);
+          
+          console.log(`Updating variation stock for ${item.name}: expected ${expectedStock}, setting to ${correctedStock}`);
+          
+          const { error } = await supabase
+            .from('variations')
+            .update({
+              stock_on_hand: correctedStock
+            })
+            .eq('id', variationId);
+            
+          if (error) {
+            console.error(`❌ Failed to update stock for variation ${item.name}:`, error);
+          } else {
+            console.log(`✅ Updated stock for variation ${item.name} to ${correctedStock}`);
+          }
+        } else if (product?.isTracked) {
+          const inv = await posAPI.getInventoryForItem(baseProductId);
           const currentStock = inv?.current_stock || 0;
           const expectedStock = stockBefore[item.id] - item.quantity;
           
@@ -464,7 +577,7 @@ const QuickSale: React.FC = () => {
                 is_out_of_stock: correctedStock <= 0,
                 last_stock_update: new Date().toISOString()
               })
-              .eq('menu_item_id', item.id)
+              .eq('menu_item_id', baseProductId)
               .select()
               .single();
               
@@ -504,6 +617,7 @@ const QuickSale: React.FC = () => {
         subtotal: calculateSubtotal(),
         discount: calculateDiscount(),
         deliveryFee: calculateDeliveryFee(),
+        qrphFee: calculateQRPHFee(),
         total: calculateTotal(),
         paymentMethod: isPayLater ? 'Pay Later' : (useMultiPayment ? 'Multiple Payments' : paymentMethod),
         amountPaid: useMultiPayment 
@@ -513,7 +627,7 @@ const QuickSale: React.FC = () => {
         isPayLater: isPayLater,
         multiPayments: useMultiPayment ? multiPayments.map(p => ({
           method: p.method,
-          amount: parseFloat(p.amount) || 0
+          amount: p.method === 'qrph' ? (parseFloat(p.amount) || 0) * 1.01 : (parseFloat(p.amount) || 0)
         })) : undefined
       };
 
@@ -985,6 +1099,7 @@ const QuickSale: React.FC = () => {
                     <option value="card">💳 Card</option>
                     <option value="gcash">📱 GCash</option>
                     <option value="maya">📱 Maya</option>
+                    <option value="qrph">📱 QRPH (+1%)</option>
                     <option value="pay-later">⏰ Pay Later</option>
                   </select>
                 </>
@@ -1038,6 +1153,7 @@ const QuickSale: React.FC = () => {
                         <option value="card">💳 Card</option>
                         <option value="gcash">📱 GCash</option>
                         <option value="maya">📱 Maya</option>
+                        <option value="qrph">📱 QRPH (+1%)</option>
                       </select>
                       <input
                         type="number"
@@ -1189,6 +1305,12 @@ const QuickSale: React.FC = () => {
                 <span className="font-semibold text-green-600">+₱{calculateDeliveryFee().toFixed(2)}</span>
               </div>
             )}
+            {calculateQRPHFee() > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">QR PH Fee (1%)</span>
+                <span className="font-semibold text-orange-600">+₱{calculateQRPHFee().toFixed(2)}</span>
+              </div>
+            )}
             <div className="border-t border-pet-orange/30 pt-2 mt-2">
               <div className="flex items-center justify-between">
                 <span className="text-lg lg:text-xl font-bold text-pet-brown">TOTAL</span>
@@ -1235,6 +1357,59 @@ const QuickSale: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Variation Selection Modal */}
+      {selectedProductForVariations && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border-2 border-pet-orange">
+            <div className="flex items-center justify-between mb-4 border-b border-pet-beige pb-2">
+              <h3 className="text-xl font-bold text-pet-orange-dark">Choose Variation</h3>
+              <button 
+                onClick={() => setSelectedProductForVariations(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <p className="text-sm font-semibold text-pet-brown mb-4">{selectedProductForVariations.name}</p>
+            
+            <div className="space-y-3">
+              {selectedProductForVariations.variations?.map((variation: any) => {
+                const stockLeft = variation.stock_on_hand !== undefined ? variation.stock_on_hand : 0;
+                const isOutOfStock = stockLeft <= 0;
+                
+                return (
+                  <button
+                    key={variation.id}
+                    onClick={() => handleSelectVariation(selectedProductForVariations, variation)}
+                    disabled={isOutOfStock}
+                    className={`w-full p-4 border-2 rounded-lg text-left font-semibold text-pet-brown transition-colors flex justify-between items-center ${
+                      isOutOfStock
+                        ? 'border-red-300 bg-red-50 opacity-60 cursor-not-allowed'
+                        : 'border-pet-orange hover:bg-pet-cream'
+                    }`}
+                  >
+                    <div>
+                      <span>{variation.name}</span>
+                      <span className={`text-xs ml-2 px-1.5 py-0.5 rounded font-bold ${
+                        isOutOfStock 
+                          ? 'bg-red-100 text-red-800' 
+                          : stockLeft <= 5 
+                            ? 'bg-yellow-100 text-yellow-800' 
+                            : 'bg-green-100 text-green-800'
+                      }`}>
+                        {isOutOfStock ? 'Out of Stock' : `${stockLeft} left`}
+                      </span>
+                    </div>
+                    <span className="text-pet-orange-dark text-lg">₱{variation.price.toFixed(2)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -2,6 +2,9 @@ export interface Variation {
   id: string;
   name: string;
   price: number;
+  stock_on_hand?: number;
+  cost_price?: number;
+  margin?: number;
 }
 
 export interface AddOn {
@@ -54,17 +57,33 @@ export interface OrderData {
   items: CartItem[];
   customerName: string;
   contactNumber: string;
-  serviceType: 'pickup' | 'delivery';
+  serviceType: 'pickup' | 'store-delivery' | 'lalamove';
   address?: string;
   pickupTime?: string;
-  paymentMethod: 'cash' | 'gcash' | 'maya' | 'bank-transfer';
+  paymentMethod: 'cash' | 'gcash' | 'maya' | 'bank-transfer' | 'qrph';
   referenceNumber?: string;
   total: number;
   notes?: string;
 }
 
-export type PaymentMethod = 'cash' | 'gcash' | 'maya' | 'bank-transfer';
-export type ServiceType = 'pickup' | 'delivery';
+export type PaymentMethod = 'cash' | 'gcash' | 'maya' | 'bank-transfer' | 'qrph';
+export type ServiceType = 'pickup' | 'store-delivery' | 'lalamove';
+
+export interface DeliverySubdivision {
+  id: string;
+  name: string;
+  delivery_fee: number;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeliveryGlobalSettings {
+  id: string;
+  free_delivery_promo: boolean;
+  updated_at: string;
+}
 
 // Site Settings Types
 export interface SiteSetting {

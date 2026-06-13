@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3, Megaphone, Search, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3, Megaphone, Search, Download, Truck } from 'lucide-react';
 import { MenuItem, Variation, AddOn, Announcement } from '../types';
 import { addOnCategories } from '../data/menuData';
 import { useMenu } from '../hooks/useMenu';
@@ -10,6 +10,7 @@ import CategoryManager from './CategoryManager';
 import PaymentMethodManager from './PaymentMethodManager';
 import SiteSettingsManager from './SiteSettingsManager';
 import POSDashboard from './POSDashboard';
+import DeliverySettingsManager from './DeliverySettingsManager';
 
 const formatForInput = (dateString?: string | null) => {
   if (!dateString) return '';
@@ -27,7 +28,7 @@ const AdminDashboard: React.FC = () => {
   const { menuItems, loading, addMenuItem, updateMenuItem, deleteMenuItem } = useMenu();
   const { categories } = useCategories();
   const { announcements, loading: announcementsLoading, addAnnouncement, updateAnnouncement, deleteAnnouncement } = useAnnouncements();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings' | 'pos' | 'announcements' | 'announcements-add' | 'announcements-edit'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings' | 'pos' | 'announcements' | 'announcements-add' | 'announcements-edit' | 'delivery-settings'>('dashboard');
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -756,27 +757,67 @@ const AdminDashboard: React.FC = () => {
               </div>
 
               {formData.variations?.map((variation, index) => (
-                <div key={variation.id} className="flex items-center space-x-3 mb-3 p-4 bg-gray-50 rounded-lg">
-                  <input
-                    type="text"
-                    value={variation.name}
-                    onChange={(e) => updateVariation(index, 'name', e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Variation name (e.g., Small, Medium, Large)"
-                  />
-                  <input
-                    type="number"
-                    value={variation.price}
-                    onChange={(e) => updateVariation(index, 'price', Number(e.target.value))}
-                    className="w-24 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Price"
-                  />
-                  <button
-                    onClick={() => removeVariation(index)}
-                    className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <div key={variation.id} className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3 p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Variation Name</label>
+                    <input
+                      type="text"
+                      value={variation.name}
+                      onChange={(e) => updateVariation(index, 'name', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="e.g. 1kg, 20kg sack"
+                    />
+                  </div>
+                  <div className="w-full sm:w-24">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Price</label>
+                    <input
+                      type="number"
+                      value={variation.price}
+                      onChange={(e) => updateVariation(index, 'price', Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Price"
+                    />
+                  </div>
+                  <div className="w-full sm:w-20">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Stock</label>
+                    <input
+                      type="number"
+                      value={variation.stock_on_hand !== undefined ? variation.stock_on_hand : ''}
+                      onChange={(e) => updateVariation(index, 'stock_on_hand', e.target.value ? Number(e.target.value) : 0)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Stock"
+                    />
+                  </div>
+                  <div className="w-full sm:w-24">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Cost</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={variation.cost_price !== undefined ? variation.cost_price : ''}
+                      onChange={(e) => updateVariation(index, 'cost_price', e.target.value ? Number(e.target.value) : 0)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Cost"
+                    />
+                  </div>
+                  <div className="w-full sm:w-20">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Margin %</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={variation.margin !== undefined ? variation.margin : ''}
+                      onChange={(e) => updateVariation(index, 'margin', e.target.value ? Number(e.target.value) : 0)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Margin"
+                    />
+                  </div>
+                  <div className="self-end sm:self-center">
+                    <button
+                      onClick={() => removeVariation(index)}
+                      className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1207,6 +1248,11 @@ const AdminDashboard: React.FC = () => {
   // Payment Methods View
   if (currentView === 'payments') {
     return <PaymentMethodManager onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Delivery Settings View
+  if (currentView === 'delivery-settings') {
+    return <DeliverySettingsManager onBack={() => setCurrentView('dashboard')} />;
   }
 
   // POS View
@@ -1657,11 +1703,18 @@ const AdminDashboard: React.FC = () => {
                 <span className="font-medium text-gray-900">Announcements</span>
               </button>
               <button
+                onClick={() => setCurrentView('delivery-settings')}
+                className="w-full flex items-center space-x-3 p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
+              >
+                <Truck className="h-5 w-5 text-gray-400" />
+                <span className="font-medium text-gray-900">Delivery Settings</span>
+              </button>
+              <button
                 onClick={() => setCurrentView('pos')}
                 className="w-full flex items-center space-x-3 p-3 text-left hover:bg-pet-orange-dark/10 rounded-lg transition-colors duration-200 border-2 border-pet-orange"
               >
                 <BarChart3 className="h-5 w-5 text-pet-orange" />
-                <span className="font-medium text-pet-orange-dark">🎯 POS System</span>
+                <span className="font-medium text-pet-orange-dark">POS System</span>
               </button>
             </div>
           </div>

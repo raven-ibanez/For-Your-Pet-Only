@@ -20,9 +20,14 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   const [showQuantityModal, setShowQuantityModal] = useState(false);
   const [showProductDetails, setShowProductDetails] = useState(false);
   const [selectedQuantity, setSelectedQuantity] = useState(1);
-  const [selectedVariation, setSelectedVariation] = useState<Variation | undefined>(
-    item.variations?.[0]
-  );
+  const [selectedVariation, setSelectedVariation] = useState<Variation | undefined>(() => {
+    if (!item.variations?.length) return undefined;
+    if (item.isTracked) {
+      const inStockVar = item.variations.find(v => (v.stock_on_hand || 0) > 0);
+      return inStockVar || item.variations[0];
+    }
+    return item.variations[0];
+  });
   const [selectedAddOns, setSelectedAddOns] = useState<(AddOn & { quantity: number })[]>([]);
   const [customizationQuantity, setCustomizationQuantity] = useState(1);
 
@@ -66,14 +71,26 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
 
   const handleCustomizedAddToCart = () => {
     // Check stock availability
-    if (item.isTracked && item.currentStock !== undefined) {
-      if (item.currentStock <= 0) {
-        alert(`Sorry, ${item.name} is out of stock.`);
-        return;
-      }
-      if (customizationQuantity > item.currentStock) {
-        alert(`Sorry, only ${item.currentStock} ${item.currentStock === 1 ? 'piece' : 'pieces'} available for ${item.name}.`);
-        return;
+    if (item.isTracked) {
+      if (selectedVariation) {
+        const vStock = selectedVariation.stock_on_hand || 0;
+        if (vStock <= 0) {
+          alert(`Sorry, ${item.name} (${selectedVariation.name}) is out of stock.`);
+          return;
+        }
+        if (customizationQuantity > vStock) {
+          alert(`Sorry, only ${vStock} ${vStock === 1 ? 'piece' : 'pieces'} available for ${item.name} (${selectedVariation.name}).`);
+          return;
+        }
+      } else if (item.currentStock !== undefined) {
+        if (item.currentStock <= 0) {
+          alert(`Sorry, ${item.name} is out of stock.`);
+          return;
+        }
+        if (customizationQuantity > item.currentStock) {
+          alert(`Sorry, only ${item.currentStock} ${item.currentStock === 1 ? 'piece' : 'pieces'} available for ${item.name}.`);
+          return;
+        }
       }
     }
     // Convert selectedAddOns back to regular AddOn array for cart
@@ -335,30 +352,49 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                 <div className="mb-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Choose Size</h4>
                   <div className="space-y-3">
-                    {item.variations.map((variation) => (
-                      <label
-                        key={variation.id}
-                        className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
-                          selectedVariation?.id === variation.id
-                            ? 'border-pet-orange bg-pet-beige'
-                            : 'border-gray-200 hover:border-pet-orange hover:bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <input
-                            type="radio"
-                            name="variation"
-                            checked={selectedVariation?.id === variation.id}
-                            onChange={() => setSelectedVariation(variation)}
-                            className="text-pet-orange focus:ring-pet-orange"
-                          />
-                          <span className="font-medium text-gray-900">{variation.name}</span>
-                        </div>
-                        <span className="text-pet-brown font-semibold">
-                          ₱{variation.price.toFixed(2)}
-                        </span>
-                      </label>
-                    ))}
+                    {item.variations.map((variation) => {
+                      const isOutOfStock = item.isTracked && (variation.stock_on_hand === undefined || variation.stock_on_hand <= 0);
+                      return (
+                        <label
+                          key={variation.id}
+                          className={`flex items-center justify-between p-4 border-2 rounded-xl transition-all duration-200 ${
+                            isOutOfStock
+                              ? 'border-red-100 bg-red-50/50 opacity-60 cursor-not-allowed'
+                              : selectedVariation?.id === variation.id
+                                ? 'border-pet-orange bg-pet-beige cursor-pointer'
+                                : 'border-gray-200 hover:border-pet-orange hover:bg-gray-50 cursor-pointer'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="radio"
+                              name="variation"
+                              checked={selectedVariation?.id === variation.id}
+                              disabled={isOutOfStock}
+                              onChange={() => !isOutOfStock && setSelectedVariation(variation)}
+                              className="text-pet-orange focus:ring-pet-orange disabled:opacity-50"
+                            />
+                            <div>
+                              <span className="font-medium text-gray-900">{variation.name}</span>
+                              {item.isTracked && (
+                                <span className={`text-xs ml-2 px-1.5 py-0.5 rounded font-bold ${
+                                  isOutOfStock
+                                    ? 'bg-red-100 text-red-800'
+                                    : (variation.stock_on_hand || 0) <= 5
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-green-100 text-green-800'
+                                }`}>
+                                  {isOutOfStock ? 'Out of Stock' : `${variation.stock_on_hand} left`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-pet-brown font-semibold">
+                            ₱{variation.price.toFixed(2)}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               )}

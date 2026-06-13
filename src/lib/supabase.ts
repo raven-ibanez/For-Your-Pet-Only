@@ -233,6 +233,52 @@ export type Database = {
           updated_at?: string;
         };
       };
+      delivery_subdivisions: {
+        Row: {
+          id: string;
+          name: string;
+          delivery_fee: number;
+          sort_order: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          delivery_fee: number;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          delivery_fee?: number;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      delivery_settings: {
+        Row: {
+          id: string;
+          free_delivery_promo: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          free_delivery_promo?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          free_delivery_promo?: boolean;
+          updated_at?: string;
+        };
+      };
     };
   };
 };

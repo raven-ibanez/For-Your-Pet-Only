@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { CartItem, PaymentMethod, ServiceType } from '../types';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
+import { useDeliverySettings } from '../hooks/useDeliverySettings';
 import { posAPI } from '../lib/pos';
 import { useMenu } from '../hooks/useMenu';
 
@@ -14,14 +15,31 @@ interface CheckoutProps {
 const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) => {
   const { paymentMethods } = usePaymentMethods();
   const { menuItems } = useMenu();
+  const { subdivisions, globalSettings } = useDeliverySettings();
   const [step, setStep] = useState<'details' | 'payment'>('details');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('pickup');
-  const [address, setAddress] = useState('');
-  const [landmark, setLandmark] = useState('');
+
+  // Pickup fields
   const [pickupTime, setPickupTime] = useState('5-10');
   const [customTime, setCustomTime] = useState('');
+
+  // Store Delivery Rider fields
+  const [selectedSubdivisionId, setSelectedSubdivisionId] = useState('');
+  const [phase, setPhase] = useState('');
+  const [block, setBlock] = useState('');
+  const [lot, setLot] = useState('');
+  const [streetName, setStreetName] = useState('');
+  const [pinAddress, setPinAddress] = useState('');
+  const [deliveryLandmark, setDeliveryLandmark] = useState('');
+  const [deliveryInstructions, setDeliveryInstructions] = useState('');
+
+  // Lalamove fields
+  const [lalamoveAddress, setLalamoveAddress] = useState('');
+  const [lalamoveNote, setLalamoveNote] = useState('');
+
+  // Payment fields
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('gcash');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
@@ -40,14 +58,27 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
     }
   }, [paymentMethods, paymentMethod]);
 
+  // Active subdivisions only
+  const activeSubdivisions = subdivisions.filter(s => s.active);
+
+  // Selected subdivision
+  const selectedSubdivision = activeSubdivisions.find(s => s.id === selectedSubdivisionId);
+
+  // Delivery fee calculation
+  const deliveryFee = React.useMemo(() => {
+    if (serviceType !== 'store-delivery' || !selectedSubdivision) return 0;
+    if (globalSettings.free_delivery_promo) return 0;
+    return selectedSubdivision.delivery_fee;
+  }, [serviceType, selectedSubdivision, globalSettings.free_delivery_promo]);
+
   const selectedPaymentMethod = paymentMethods.find(method => method.id === paymentMethod);
 
   // Check if payment method is QR PH and calculate 1% fee
-  const isQRPH = selectedPaymentMethod?.name.toLowerCase().includes('qr ph') || 
-                 selectedPaymentMethod?.name.toLowerCase().includes('qrph') ||
-                 selectedPaymentMethod?.id.toLowerCase().includes('qr-ph') ||
-                 selectedPaymentMethod?.id.toLowerCase().includes('qrph');
-  
+  const isQRPH = selectedPaymentMethod?.name.toLowerCase().includes('qr ph') ||
+    selectedPaymentMethod?.name.toLowerCase().includes('qrph') ||
+    selectedPaymentMethod?.id.toLowerCase().includes('qr-ph') ||
+    selectedPaymentMethod?.id.toLowerCase().includes('qrph');
+
   const qrphFee = React.useMemo(() => {
     if (isQRPH && totalPrice > 0) {
       return totalPrice * 0.01; // 1% fee
@@ -56,8 +87,8 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
   }, [isQRPH, totalPrice]);
 
   const finalTotal = React.useMemo(() => {
-    return totalPrice + qrphFee;
-  }, [totalPrice, qrphFee]);
+    return totalPrice + qrphFee + deliveryFee;
+  }, [totalPrice, qrphFee, deliveryFee]);
 
   // Calculate change when cash amount paid changes
   const cashChange = React.useMemo(() => {
@@ -76,17 +107,17 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
 
   const handlePlaceOrder = async () => {
     if (isProcessing) return;
-    
+
     try {
       setIsProcessing(true);
       console.log('🛒 Starting order creation for website checkout...');
-      
+
       // Prepare order items - calculate unit price per item (totalPrice already includes variations/add-ons)
       const orderItems = cartItems.map(item => {
         // For each cart item, the totalPrice is the price per unit (base + variations + add-ons)
         // So unit_price should be totalPrice (it's already per unit)
         const unitPrice = item.totalPrice;
-        
+
         // Extract base menu_item_id from the unique cart item ID
         // Cart item ID format: {menu_item_id}-{variation_id}-{addon_ids}
         // We need just the base menu_item_id (UUID format: 8-4-4-4-12 = 36 chars)
@@ -108,10 +139,18 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
             }
           }
         }
-        
+
+        let itemName = item.name;
+        if (item.selectedVariation) {
+          itemName += ` (${item.selectedVariation.name})`;
+        }
+        if (item.selectedAddOns && item.selectedAddOns.length > 0) {
+          itemName += ` + ${item.selectedAddOns.map(addOn => addOn.name).join(', ')}`;
+        }
+
         return {
           menu_item_id: menuItemId,
-          item_name: item.name,
+          item_name: itemName,
           unit_price: unitPrice,
           quantity: item.quantity
         };
@@ -120,11 +159,11 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
       // Create order in database
       console.log('📝 Creating order in database...');
       const order = await posAPI.createOrder({
-        order_type: serviceType, // 'pickup' or 'delivery'
+        order_type: serviceType, // 'pickup', 'store-delivery', or 'lalamove'
         customer_name: customerName,
         customer_phone: contactNumber,
         items: orderItems,
-        discount_amount: 0 // Add discount if needed
+        discount_amount: 0
       });
 
       console.log('✅ Order created:', order.order_number);
@@ -141,75 +180,83 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
       console.log('✅ Payment recorded');
 
       // Complete the order immediately to trigger inventory updates
-      // This is what updates the stock according to the order
       console.log('📦 Completing order to update inventory...');
       await posAPI.completeOrder(order.id);
 
       console.log('✅ Order completed - inventory updated!');
-      console.log('📊 Stock levels have been updated based on order:', order.order_number);
 
-      // Now prepare Messenger message with order details
-      const timeInfo = serviceType === 'pickup' 
-        ? (pickupTime === 'custom' ? customTime : `${pickupTime} minutes`)
-        : '';
-      
+      // Build service-specific details for Messenger message
+      let serviceDetails = '';
+      if (serviceType === 'pickup') {
+        const timeInfo = pickupTime === 'custom' ? customTime : `${pickupTime} minutes`;
+        serviceDetails = `📍 Service: PICK-UP\n⏰ Pickup Time: ${timeInfo}`;
+      } else if (serviceType === 'store-delivery') {
+        const subdivisionName = selectedSubdivision?.name || 'N/A';
+        const feeText = globalSettings.free_delivery_promo ? 'FREE (Promo)' : `₱${deliveryFee.toFixed(2)}`;
+        serviceDetails = `📍 Service: STORE DELIVERY RIDER\n🏘️ Subdivision: ${subdivisionName}\n🛵 Delivery Fee: ${feeText}`;
+        serviceDetails += `\n🏠 Phase: ${phase || 'N/A'}, Block: ${block || 'N/A'}, Lot: ${lot || 'N/A'}, Street: ${streetName || 'N/A'}`;
+        if (pinAddress) serviceDetails += `\n📌 Pin Address: ${pinAddress}`;
+        if (deliveryLandmark) serviceDetails += `\n🗺️ Landmark: ${deliveryLandmark}`;
+        if (deliveryInstructions) serviceDetails += `\n📝 Instructions: ${deliveryInstructions}`;
+      } else if (serviceType === 'lalamove') {
+        serviceDetails = `📍 Service: LALAMOVE\n🏠 Delivery Address: ${lalamoveAddress}`;
+        if (lalamoveNote) serviceDetails += `\n📝 Note: ${lalamoveNote}`;
+      }
+
       const orderDetails = `
 🛒 For Your Pets Only ORDER
 📦 Order #: ${order.order_number}
 
 👤 Customer: ${customerName}
 📞 Contact: ${contactNumber}
-📍 Service: ${serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}
-${serviceType === 'delivery' ? `🏠 Address: ${address}${landmark ? `\n🗺️ Landmark: ${landmark}` : ''}` : ''}
-${serviceType === 'pickup' ? `⏰ Pickup Time: ${timeInfo}` : ''}
+${serviceDetails}
 
 
 📋 ORDER DETAILS:
 ${cartItems.map(item => {
-  let itemDetails = `• ${item.name}`;
-  if (item.selectedVariation) {
-    itemDetails += ` (${item.selectedVariation.name})`;
-  }
-  if (item.selectedAddOns && item.selectedAddOns.length > 0) {
-    itemDetails += ` + ${item.selectedAddOns.map(addOn => 
-      addOn.quantity && addOn.quantity > 1 
-        ? `${addOn.name} x${addOn.quantity}`
-        : addOn.name
-    ).join(', ')}`;
-  }
-  // Get base price (use basePrice or effectivePrice)
-  const basePrice = item.basePrice || item.effectivePrice || item.totalPrice;
-  itemDetails += ` ₱${basePrice.toFixed(2)} x ${item.quantity} - ₱${(item.totalPrice * item.quantity).toFixed(2)}`;
-  return itemDetails;
-}).join('\n\n')}
+        let itemDetails = `• ${item.name}`;
+        if (item.selectedVariation) {
+          itemDetails += ` (${item.selectedVariation.name})`;
+        }
+        if (item.selectedAddOns && item.selectedAddOns.length > 0) {
+          itemDetails += ` + ${item.selectedAddOns.map(addOn =>
+            addOn.quantity && addOn.quantity > 1
+              ? `${addOn.name} x${addOn.quantity}`
+              : addOn.name
+          ).join(', ')}`;
+        }
+        itemDetails += ` ₱${item.totalPrice.toFixed(2)} x ${item.quantity} = ₱${(item.totalPrice * item.quantity).toFixed(2)}`;
+        return itemDetails;
+      }).join('\n\n')}
 
 💰 SUBTOTAL: ₱${totalPrice.toFixed(2)}
 ${qrphFee > 0 ? `💳 QR PH Fee (1%): ₱${qrphFee.toFixed(2)}` : ''}
-${serviceType === 'delivery' ? `🛵 DELIVERY FEE:` : ''}
+${deliveryFee > 0 ? `🛵 Delivery Fee: ₱${deliveryFee.toFixed(2)}` : ''}
+${globalSettings.free_delivery_promo && serviceType === 'store-delivery' ? '🎉 FREE DELIVERY PROMO APPLIED' : ''}
 
 💰 TOTAL: ₱${finalTotal.toFixed(2)}
 
-💳 Payment: ${paymentMethod === 'cash' ? 'Cash' : (selectedPaymentMethod?.name || paymentMethod)}
-${paymentMethod === 'cash' 
-  ? `💰 Amount Paid: ₱${cashAmountPaid || '0.00'}\n${cashChange !== '0.00' ? `🔄 Change: ₱${cashChange}` : ''}${cashChangeNeeded ? `\n📝 Change Note: ${cashChangeNeeded}` : ''}`
-  : `📸 Payment Screenshot: Please attach your payment receipt screenshot${qrphFee > 0 ? `\n💡 Note: 1% QR PH convenience fee included` : ''}`}
+💳 Payment: ${paymentMethod === 'cash' ? 'Cash' : (isQRPH ? 'QR Ph (+1% transaction fee)' : (selectedPaymentMethod?.name || paymentMethod))}
+${paymentMethod === 'cash'
+          ? `💰 Amount Paid: ₱${cashAmountPaid || '0.00'}\n${cashChange !== '0.00' ? `🔄 Change: ₱${cashChange}` : ''}${cashChangeNeeded ? `\n📝 Change Note: ${cashChangeNeeded}` : ''}`
+          : `📸 Payment Screenshot: Please attach your payment receipt screenshot${isQRPH ? '\n💡 Note: 1% QR PH convenience fee included' : ''}`}
 
 ${notes ? `📝 Notes: ${notes}` : ''}
 
-Please confirm this order to proceed. Thank you for choosing For Your Pets Only! 🥟
+Please confirm this order to proceed. Thank you for choosing For Your Pets Only! 🐾
       `.trim();
 
       const encodedMessage = encodeURIComponent(orderDetails);
       const messengerUrl = `https://m.me/100310379306836?text=${encodedMessage}`;
-      
+
       // Open Messenger immediately (before alert to avoid popup blocking)
       const messengerWindow = window.open(messengerUrl, '_blank');
-      
+
       // Show success message after opening Messenger
       setTimeout(() => {
         alert(`✅ Order ${order.order_number} created successfully!\n\nStock levels have been updated.`);
       }, 100);
-      
+
       // If popup was blocked, show fallback with link
       if (!messengerWindow || messengerWindow.closed || typeof messengerWindow.closed === 'undefined') {
         setTimeout(() => {
@@ -220,7 +267,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           }
         }, 200);
       }
-      
+
     } catch (error: any) {
       console.error('❌ Error creating order:', error);
       alert(`Failed to create order: ${error.message}\n\nPlease try again or contact support.`);
@@ -229,9 +276,14 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
     }
   };
 
-  const isDetailsValid = customerName && contactNumber && 
-    (serviceType !== 'delivery' || address) && 
-    (serviceType !== 'pickup' || (pickupTime !== 'custom' || customTime));
+  // Validation
+  const isDetailsValid = React.useMemo(() => {
+    if (!customerName || !contactNumber) return false;
+    if (serviceType === 'pickup' && pickupTime === 'custom' && !customTime) return false;
+    if (serviceType === 'store-delivery' && (!selectedSubdivisionId || !phase || !block || !lot || !streetName)) return false;
+    if (serviceType === 'lalamove' && !lalamoveAddress) return false;
+    return true;
+  }, [customerName, contactNumber, serviceType, pickupTime, customTime, selectedSubdivisionId, phase, block, lot, streetName, lalamoveAddress]);
 
   if (step === 'details') {
     return (
@@ -251,7 +303,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           {/* Order Summary */}
           <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-pet-orange">
             <h2 className="text-2xl font-display font-bold text-pet-orange-dark mb-6">📋 Order Summary</h2>
-            
+
             <div className="space-y-4 mb-6">
               {cartItems.map((item) => (
                 <div key={item.id} className="flex items-center justify-between py-2 border-b-2 border-pet-beige">
@@ -271,11 +323,27 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                 </div>
               ))}
             </div>
-            
-            <div className="border-t-2 border-pet-orange pt-4">
-              <div className="flex items-center justify-between text-2xl font-display font-bold text-pet-brown">
+
+            <div className="border-t-2 border-pet-orange pt-4 space-y-2">
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <span>Subtotal:</span>
+                <span>₱{totalPrice.toFixed(2)}</span>
+              </div>
+              {deliveryFee > 0 && (
+                <div className="flex items-center justify-between text-sm text-pet-orange">
+                  <span>🛵 Delivery Fee ({selectedSubdivision?.name}):</span>
+                  <span>₱{deliveryFee.toFixed(2)}</span>
+                </div>
+              )}
+              {globalSettings.free_delivery_promo && serviceType === 'store-delivery' && selectedSubdivision && (
+                <div className="flex items-center justify-between text-sm text-green-600 font-medium">
+                  <span>🎉 Free Delivery Promo:</span>
+                  <span>-₱{selectedSubdivision.delivery_fee.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-2xl font-display font-bold text-pet-brown pt-2 border-t border-pet-beige">
                 <span>Total:</span>
-                <span className="text-pet-orange-dark">₱{totalPrice}</span>
+                <span className="text-pet-orange-dark">₱{(totalPrice + deliveryFee).toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -283,7 +351,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           {/* Customer Details Form */}
           <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-pet-orange">
             <h2 className="text-2xl font-display font-bold text-pet-orange-dark mb-6">👤 Customer Information</h2>
-            
+
             <form className="space-y-6">
               {/* Customer Information */}
               <div>
@@ -313,29 +381,29 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
               {/* Service Type */}
               <div>
                 <label className="block text-sm font-semibold text-pet-brown mb-3">Service Type *</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   {[
-                    { value: 'pickup', label: 'Pickup', icon: '🚶' },
-                    { value: 'delivery', label: 'Delivery', icon: '🛵' }
+                    { value: 'pickup' as ServiceType, label: 'PICK-UP', icon: '🚶' },
+                    { value: 'store-delivery' as ServiceType, label: 'STORE DELIVERY RIDER', icon: '🛵' },
+                    { value: 'lalamove' as ServiceType, label: 'LALAMOVE', icon: '📦' }
                   ].map((option) => (
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => setServiceType(option.value as ServiceType)}
-                      className={`p-4 rounded-lg border-2 transition-all duration-200 font-semibold ${
-                        serviceType === option.value
-                          ? 'border-pet-orange bg-pet-orange text-white shadow-lg'
-                          : 'border-pet-orange bg-white text-pet-brown hover:bg-pet-beige'
-                      }`}
+                      onClick={() => setServiceType(option.value)}
+                      className={`p-4 rounded-lg border-2 transition-all duration-200 font-semibold text-center ${serviceType === option.value
+                        ? 'border-pet-orange bg-pet-orange text-white shadow-lg'
+                        : 'border-pet-orange bg-white text-pet-brown hover:bg-pet-beige'
+                        }`}
                     >
                       <div className="text-2xl mb-1">{option.icon}</div>
-                      <div className="text-sm">{option.label}</div>
+                      <div className="text-xs leading-tight">{option.label}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Pickup Time Selection */}
+              {/* ========== PICK-UP FIELDS ========== */}
               {serviceType === 'pickup' && (
                 <div>
                   <label className="block text-sm font-medium text-black mb-3">Pickup Time *</label>
@@ -351,24 +419,23 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                           key={option.value}
                           type="button"
                           onClick={() => setPickupTime(option.value)}
-                          className={`p-3 rounded-lg border-2 transition-all duration-200 text-sm ${
-                            pickupTime === option.value
-                              ? 'border-red-600 bg-red-600 text-white'
-                              : 'border-red-300 bg-white text-gray-700 hover:border-red-400'
-                          }`}
+                          className={`p-3 rounded-lg border-2 transition-all duration-200 text-sm ${pickupTime === option.value
+                            ? 'border-pet-orange bg-pet-orange text-white'
+                            : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
+                            }`}
                         >
                           <Clock className="h-4 w-4 mx-auto mb-1" />
                           {option.label}
                         </button>
                       ))}
                     </div>
-                    
+
                     {pickupTime === 'custom' && (
                       <input
                         type="text"
                         value={customTime}
                         onChange={(e) => setCustomTime(e.target.value)}
-                        className="w-full px-4 py-3 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
+                        className="w-full px-4 py-3 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
                         placeholder="e.g., 45 minutes, 1 hour, 2:30 PM"
                         required
                       />
@@ -377,54 +444,183 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                 </div>
               )}
 
-              {/* Delivery Address */}
-              {serviceType === 'delivery' && (
-                <>
+              {/* ========== STORE DELIVERY RIDER FIELDS ========== */}
+              {serviceType === 'store-delivery' && (
+                <div className="space-y-4">
+                  {/* Subdivision Dropdown */}
                   <div>
-                    <label className="block text-sm font-medium text-black mb-2">Delivery Address *</label>
+                    <label className="block text-sm font-semibold text-pet-brown mb-2">Choose your Subdivision *</label>
+                    <select
+                      value={selectedSubdivisionId}
+                      onChange={(e) => setSelectedSubdivisionId(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-pet-orange rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange-dark transition-all duration-200 bg-white"
+                    >
+                      <option value="">-- Select Subdivision --</option>
+                      {activeSubdivisions.map((sub) => (
+                        <option key={sub.id} value={sub.id}>
+                          {sub.name} ({globalSettings.free_delivery_promo ? 'FREE' : `₱${sub.delivery_fee.toFixed(2)}`})
+                        </option>
+                      ))}
+                    </select>
+                    {selectedSubdivision && (
+                      <div className="mt-2 p-2 rounded-lg bg-pet-beige">
+                        {globalSettings.free_delivery_promo ? (
+                          <p className="text-sm text-green-600 font-medium">🎉 Free Delivery Promo! Delivery fee: <span className="line-through text-gray-400">₱{selectedSubdivision.delivery_fee.toFixed(2)}</span> <strong>FREE</strong></p>
+                        ) : (
+                          <p className="text-sm text-pet-brown">
+                            🛵 Delivery Fee: <strong className="text-pet-orange-dark">₱{selectedSubdivision.delivery_fee.toFixed(2)}</strong>
+                            {selectedSubdivision.delivery_fee === 0 && ' (Free)'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Address Fields */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-pet-brown mb-1">Phase # *</label>
+                      <input
+                        type="text"
+                        value={phase}
+                        onChange={(e) => setPhase(e.target.value)}
+                        className="w-full px-3 py-2.5 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                        placeholder="Enter your Phase #"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-pet-brown mb-1">Block # *</label>
+                      <input
+                        type="text"
+                        value={block}
+                        onChange={(e) => setBlock(e.target.value)}
+                        className="w-full px-3 py-2.5 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                        placeholder="Enter your Block #"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-pet-brown mb-1">Lot # *</label>
+                      <input
+                        type="text"
+                        value={lot}
+                        onChange={(e) => setLot(e.target.value)}
+                        className="w-full px-3 py-2.5 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                        placeholder="Enter your Lot #"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-pet-brown mb-1">Street Name *</label>
+                      <input
+                        type="text"
+                        value={streetName}
+                        onChange={(e) => setStreetName(e.target.value)}
+                        className="w-full px-3 py-2.5 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                        placeholder="Enter your Street Name"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Optional Fields */}
+                  <div>
+                    <label className="block text-sm font-medium text-pet-brown mb-1">Pin Address (optional)</label>
+                    <input
+                      type="text"
+                      value={pinAddress}
+                      onChange={(e) => setPinAddress(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                      placeholder="e.g., Waze pin or Google Maps pin"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-pet-brown mb-1">Landmark (optional)</label>
+                    <input
+                      type="text"
+                      value={deliveryLandmark}
+                      onChange={(e) => setDeliveryLandmark(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                      placeholder="e.g., Near sari-sari store, beside basketball court"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-pet-brown mb-1">Special Instructions (optional)</label>
                     <textarea
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      className="w-full px-4 py-3 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
+                      value={deliveryInstructions}
+                      onChange={(e) => setDeliveryInstructions(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                      placeholder="Any special delivery instructions..."
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ========== LALAMOVE FIELDS ========== */}
+              {serviceType === 'lalamove' && (
+                <div className="space-y-4">
+                  {/* Lalamove Info Note */}
+                  <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
+                    <p className="text-sm text-amber-800 font-medium mb-2">📝 NOTE:</p>
+                    <ul className="text-sm text-amber-700 space-y-1">
+                      <li>• Buyer to arrange booking and pay the delivery fee.</li>
+                      <li>• Online payment should be made before booking.</li>
+                      <li>• Can be picked up anytime during open hours.</li>
+                      <li> <b>Pick-up Address:</b> Natalia Homes, Phase 1B Block 18 Lot 66, Pine Street, Pasong Kawayan 2, General Trias, Cavite</li>
+
+                    </ul>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-pet-brown mb-2">Delivery Address *</label>
+                    <textarea
+                      value={lalamoveAddress}
+                      onChange={(e) => setLalamoveAddress(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-pet-orange rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange-dark transition-all duration-200"
                       placeholder="Enter your complete delivery address"
                       rows={3}
                       required
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-black mb-2">Landmark</label>
-                    <input
-                      type="text"
-                      value={landmark}
-                      onChange={(e) => setLandmark(e.target.value)}
-                      className="w-full px-4 py-3 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
-                      placeholder="e.g., Near McDonald's, Beside 7-Eleven, In front of school"
+                    <label className="block text-sm font-medium text-pet-brown mb-2">Note (optional)</label>
+                    <textarea
+                      value={lalamoveNote}
+                      onChange={(e) => setLalamoveNote(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                      placeholder="Any additional notes for the order..."
+                      rows={2}
                     />
                   </div>
-                </>
+                </div>
               )}
 
-              {/* Special Notes */}
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">Special Instructions</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-4 py-3 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Any special requests or notes..."
-                  rows={3}
-                />
-              </div>
+              {/* Special Notes (global, only for pickup) */}
+              {serviceType === 'pickup' && (
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">Special Instructions</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-pet-orange/30 rounded-lg focus:ring-2 focus:ring-pet-orange focus:border-pet-orange transition-all duration-200"
+                    placeholder="Any special requests or notes..."
+                    rows={3}
+                  />
+                </div>
+              )}
 
               <button
                 onClick={handleProceedToPayment}
                 disabled={!isDetailsValid}
-                className={`w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${
-                  isDetailsValid
-                    ? 'bg-red-600 text-white hover:bg-red-700 hover:scale-[1.02]'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
+                className={`w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${isDetailsValid
+                  ? 'bg-pet-orange text-white hover:bg-pet-orange-dark hover:scale-[1.02]'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
               >
                 Proceed to Payment
               </button>
@@ -453,7 +649,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
         {/* Payment Method Selection */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h2 className="text-2xl font-noto font-medium text-black mb-6">Choose Payment Method</h2>
-          
+
           <div className="grid grid-cols-1 gap-4 mb-6">
             {/* Cash Payment Option */}
             <button
@@ -463,16 +659,15 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                 setCashAmountPaid('');
                 setCashChangeNeeded('');
               }}
-              className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${
-                paymentMethod === 'cash'
-                  ? 'border-red-600 bg-red-600 text-white'
-                  : 'border-red-300 bg-white text-gray-700 hover:border-red-400'
-              }`}
+              className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${paymentMethod === 'cash'
+                ? 'border-pet-orange bg-pet-orange text-white'
+                : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
+                }`}
             >
               <span className="text-2xl">💵</span>
               <span className="font-medium">Cash</span>
             </button>
-            
+
             {/* Other Payment Methods */}
             {paymentMethods.map((method) => (
               <button
@@ -483,11 +678,10 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                   setCashAmountPaid('');
                   setCashChangeNeeded('');
                 }}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${
-                  paymentMethod === method.id
-                    ? 'border-red-600 bg-red-600 text-white'
-                    : 'border-red-300 bg-white text-gray-700 hover:border-red-400'
-                }`}
+                className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${paymentMethod === method.id
+                  ? 'border-pet-orange bg-pet-orange text-white'
+                  : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
+                  }`}
               >
                 <span className="text-2xl">💳</span>
                 <span className="font-medium">{method.name}</span>
@@ -499,7 +693,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           {paymentMethod === 'cash' && (
             <div className="bg-green-50 rounded-lg p-6 mb-6 border-2 border-green-200">
               <h3 className="font-medium text-black mb-4">💵 Cash Payment Details</h3>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-black mb-2">
@@ -513,14 +707,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                     onChange={(e) => {
                       const value = e.target.value;
                       setCashAmountPaid(value);
-                      // Auto-calculate if amount is sufficient
-                      if (value && parseFloat(value) >= finalTotal) {
-                        const change = (parseFloat(value) - finalTotal).toFixed(2);
-                        // Removed automatic "Change needed" suggestion
-                        setCashChangeNeeded('');
-                      } else {
-                        setCashChangeNeeded('');
-                      }
+                      setCashChangeNeeded('');
                     }}
                     className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
                     placeholder={`₱${finalTotal.toFixed(2)}`}
@@ -531,6 +718,13 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                       <>
                         Subtotal: ₱{totalPrice.toFixed(2)}<br />
                         QR PH Fee (1%): ₱{qrphFee.toFixed(2)}<br />
+                        {deliveryFee > 0 && (<>Delivery Fee: ₱{deliveryFee.toFixed(2)}<br /></>)}
+                        <span className="font-semibold">Total: ₱{finalTotal.toFixed(2)}</span>
+                      </>
+                    ) : deliveryFee > 0 ? (
+                      <>
+                        Subtotal: ₱{totalPrice.toFixed(2)}<br />
+                        Delivery Fee: ₱{deliveryFee.toFixed(2)}<br />
                         <span className="font-semibold">Total: ₱{finalTotal.toFixed(2)}</span>
                       </>
                     ) : (
@@ -583,7 +777,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
 
           {/* Payment Details with QR Code */}
           {selectedPaymentMethod && paymentMethod !== 'cash' && (
-            <div className="bg-red-50 rounded-lg p-6 mb-6">
+            <div className="bg-pet-beige rounded-lg p-6 mb-6">
               <h3 className="font-medium text-black mb-4">Payment Details</h3>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex-1">
@@ -596,13 +790,16 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                       <p className="text-sm text-orange-600 font-semibold">QR PH Fee (1%): ₱{qrphFee.toFixed(2)}</p>
                     </div>
                   )}
+                  {deliveryFee > 0 && (
+                    <p className="text-sm text-pet-orange font-semibold">Delivery Fee: ₱{deliveryFee.toFixed(2)}</p>
+                  )}
                   <p className="text-xl font-semibold text-black">Amount: ₱{finalTotal.toFixed(2)}</p>
                 </div>
                 <div className="flex-shrink-0">
-                  <img 
-                    src={selectedPaymentMethod.qr_code_url} 
+                  <img
+                    src={selectedPaymentMethod.qr_code_url}
                     alt={`${selectedPaymentMethod.name} QR Code`}
-                    className="w-32 h-32 rounded-lg border-2 border-red-300 shadow-sm"
+                    className="w-32 h-32 rounded-lg border-2 border-pet-orange/30 shadow-sm"
                     onError={(e) => {
                       e.currentTarget.src = 'https://images.pexels.com/photos/8867482/pexels-photo-8867482.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop';
                     }}
@@ -627,17 +824,32 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
         {/* Order Summary */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h2 className="text-2xl font-noto font-medium text-black mb-6">Final Order Summary</h2>
-          
+
           <div className="space-y-4 mb-6">
-            <div className="bg-red-50 rounded-lg p-4">
+            <div className="bg-pet-beige rounded-lg p-4">
               <h4 className="font-medium text-black mb-2">Customer Details</h4>
               <p className="text-sm text-gray-600">Name: {customerName}</p>
               <p className="text-sm text-gray-600">Contact: {contactNumber}</p>
-              <p className="text-sm text-gray-600">Service: {serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}</p>
-              {serviceType === 'delivery' && (
+              <p className="text-sm text-gray-600">
+                Service: {serviceType === 'pickup' ? 'PICK-UP' : serviceType === 'store-delivery' ? 'STORE DELIVERY RIDER' : 'LALAMOVE'}
+              </p>
+              {serviceType === 'store-delivery' && selectedSubdivision && (
                 <>
-                  <p className="text-sm text-gray-600">Address: {address}</p>
-                  {landmark && <p className="text-sm text-gray-600">Landmark: {landmark}</p>}
+                  <p className="text-sm text-gray-600">Subdivision: {selectedSubdivision.name}</p>
+                  <p className="text-sm text-gray-600">
+                    Address: Phase {phase}, Block {block}, Lot {lot}, {streetName}
+                  </p>
+                  {pinAddress && <p className="text-sm text-gray-600">Pin: {pinAddress}</p>}
+                  {deliveryLandmark && <p className="text-sm text-gray-600">Landmark: {deliveryLandmark}</p>}
+                  <p className="text-sm text-pet-orange font-medium">
+                    Delivery Fee: {globalSettings.free_delivery_promo ? 'FREE (Promo)' : `₱${deliveryFee.toFixed(2)}`}
+                  </p>
+                </>
+              )}
+              {serviceType === 'lalamove' && (
+                <>
+                  <p className="text-sm text-gray-600">Address: {lalamoveAddress}</p>
+                  {lalamoveNote && <p className="text-sm text-gray-600">Note: {lalamoveNote}</p>}
                 </>
               )}
               {serviceType === 'pickup' && (
@@ -648,7 +860,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
             </div>
 
             {cartItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between py-2 border-b border-red-100">
+              <div key={item.id} className="flex items-center justify-between py-2 border-b border-pet-beige">
                 <div>
                   <h4 className="font-medium text-black">{item.name}</h4>
                   {item.selectedVariation && (
@@ -656,8 +868,8 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                   )}
                   {item.selectedAddOns && item.selectedAddOns.length > 0 && (
                     <p className="text-sm text-gray-600">
-                      Add-ons: {item.selectedAddOns.map(addOn => 
-                        addOn.quantity && addOn.quantity > 1 
+                      Add-ons: {item.selectedAddOns.map(addOn =>
+                        addOn.quantity && addOn.quantity > 1
                           ? `${addOn.name} x${addOn.quantity}`
                           : addOn.name
                       ).join(', ')}
@@ -669,17 +881,27 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
               </div>
             ))}
           </div>
-          
-          <div className="border-t border-red-200 pt-4 mb-6">
-            <div className="flex items-center justify-between text-2xl font-noto font-semibold text-black">
-              <span>Total:</span>
-              <div className="text-right">
-                {qrphFee > 0 && (
-                  <>
-                    <div className="text-sm text-gray-600">Subtotal: ₱{totalPrice.toFixed(2)}</div>
-                    <div className="text-sm text-orange-600">QR PH Fee (1%): ₱{qrphFee.toFixed(2)}</div>
-                  </>
-                )}
+
+          <div className="border-t border-pet-orange/20 pt-4 mb-6">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <span>Subtotal:</span>
+                <span>₱{totalPrice.toFixed(2)}</span>
+              </div>
+              {qrphFee > 0 && (
+                <div className="flex items-center justify-between text-sm text-orange-600">
+                  <span>QR PH Fee (1%):</span>
+                  <span>₱{qrphFee.toFixed(2)}</span>
+                </div>
+              )}
+              {serviceType === 'store-delivery' && selectedSubdivision && (
+                <div className="flex items-center justify-between text-sm text-pet-orange">
+                  <span>🛵 Delivery Fee ({selectedSubdivision.name}):</span>
+                  <span>{globalSettings.free_delivery_promo ? <span className="text-green-600 font-medium">FREE</span> : `₱${deliveryFee.toFixed(2)}`}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-2xl font-noto font-semibold text-black pt-2 border-t border-pet-beige">
+                <span>Total:</span>
                 <span className="font-bold text-lg">₱{finalTotal.toFixed(2)}</span>
               </div>
             </div>
@@ -688,19 +910,18 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           <button
             onClick={handlePlaceOrder}
             disabled={
-              isProcessing || 
+              isProcessing ||
               (paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal))
             }
-            className={`w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${
-              isProcessing || 
+            className={`w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${isProcessing ||
               (paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal))
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-red-600 text-white hover:bg-red-700 hover:scale-[1.02]'
-            }`}
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-pet-orange text-white hover:bg-pet-orange-dark hover:scale-[1.02]'
+              }`}
           >
             {isProcessing ? 'Processing Order...' : 'Place Order via Messenger'}
           </button>
-          
+
           <p className="text-xs text-gray-500 text-center mt-3">
             You'll be redirected to Facebook Messenger to confirm your order. Don't forget to attach your payment screenshot!
           </p>

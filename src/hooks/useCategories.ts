@@ -135,6 +135,22 @@ export const useCategories = () => {
 
   useEffect(() => {
     fetchCategories();
+
+    const categoriesChannel = supabase
+      .channel('categories_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categories' },
+        () => {
+          console.log('🔄 Real-time update: categories changed');
+          fetchCategories();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(categoriesChannel);
+    };
   }, []);
 
   return {

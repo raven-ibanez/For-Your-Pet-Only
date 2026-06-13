@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Edit, AlertTriangle, TrendingDown, Coins, Barcode, ArrowUp, ArrowDown, Calendar, Search, Download } from 'lucide-react';
+import { Package, Plus, Edit, AlertTriangle, TrendingDown, Coins, Barcode, ArrowUp, ArrowDown, Calendar, Search, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import { posAPI } from '../../lib/pos';
 import { supabase } from '../../lib/supabase';
 
@@ -12,8 +12,18 @@ const InventoryManagement: React.FC = () => {
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [newStockAmount, setNewStockAmount] = useState('');
+  const [newCostPrice, setNewCostPrice] = useState('');
+  const [newMargin, setNewMargin] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (itemId: string) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
 
   // Stock Movements state
   const [stockMovements, setStockMovements] = useState<any[]>([]);
@@ -219,38 +229,84 @@ const InventoryManagement: React.FC = () => {
     }
 
     try {
-      console.log('🔄 Adjusting stock:', {
-        item: selectedItem.menu_items?.name,
-        oldStock: selectedItem.current_stock,
-        newStock: stockAmount,
-        reason: adjustReason
-      });
+      if (selectedItem.isVariation) {
+        const costVal = parseFloat(newCostPrice);
+        const marginVal = parseFloat(newMargin);
 
-      // Direct database update
-      const { data, error } = await supabase
-        .from('inventory')
-        .update({
-          current_stock: stockAmount,
-          is_low_stock: stockAmount <= selectedItem.minimum_stock,
-          is_out_of_stock: stockAmount <= 0,
-          last_stock_update: new Date().toISOString()
-        })
-        .eq('menu_item_id', selectedItem.menu_item_id)
-        .select()
-        .single();
+        if (isNaN(costVal) || costVal < 0) {
+          alert('Please enter a valid cost price');
+          return;
+        }
+        if (isNaN(marginVal) || marginVal < 0) {
+          alert('Please enter a valid margin');
+          return;
+        }
 
-      if (error) {
-        console.error('❌ Stock adjustment error:', error);
-        alert(`Failed to adjust stock: ${error.message}`);
-        return;
+        console.log('🔄 Adjusting variation stock:', {
+          item: selectedItem.menu_items?.name,
+          variation: selectedItem.variationName,
+          oldStock: selectedItem.current_stock,
+          newStock: stockAmount,
+          cost: costVal,
+          margin: marginVal,
+          reason: adjustReason
+        });
+
+        const { data, error } = await supabase
+          .from('variations')
+          .update({
+            stock_on_hand: stockAmount,
+            cost_price: costVal,
+            margin: marginVal
+          })
+          .eq('id', selectedItem.variationId)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('❌ Variation adjustment error:', error);
+          alert(`Failed to adjust variation: ${error.message}`);
+          return;
+        }
+
+        console.log('✅ Variation adjusted successfully:', data);
+        alert(`✅ Variation Updated!\n${selectedItem.menu_items?.name} (${selectedItem.variationName})\nStock: ${stockAmount}\nCost: ₱${costVal.toFixed(2)}\nMargin: ${marginVal}%\nReason: ${adjustReason}`);
+      } else {
+        console.log('🔄 Adjusting stock:', {
+          item: selectedItem.menu_items?.name,
+          oldStock: selectedItem.current_stock,
+          newStock: stockAmount,
+          reason: adjustReason
+        });
+
+        // Direct database update
+        const { data, error } = await supabase
+          .from('inventory')
+          .update({
+            current_stock: stockAmount,
+            is_low_stock: stockAmount <= selectedItem.minimum_stock,
+            is_out_of_stock: stockAmount <= 0,
+            last_stock_update: new Date().toISOString()
+          })
+          .eq('menu_item_id', selectedItem.menu_item_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('❌ Stock adjustment error:', error);
+          alert(`Failed to adjust stock: ${error.message}`);
+          return;
+        }
+
+        console.log('✅ Stock adjusted successfully:', data);
+        alert(`✅ Stock Updated!\n${selectedItem.menu_items?.name}\nOld Stock: ${selectedItem.current_stock}\nNew Stock: ${stockAmount}\nReason: ${adjustReason}`);
       }
-
-      console.log('✅ Stock adjusted successfully:', data);
-      alert(`✅ Stock Updated!\n${selectedItem.menu_items?.name}\nOld Stock: ${selectedItem.current_stock}\nNew Stock: ${stockAmount}\nReason: ${adjustReason}`);
 
       setShowAdjustModal(false);
       setSelectedItem(null);
       setNewStockAmount('');
+      setNewCostPrice('');
+      setNewMargin('');
       setAdjustReason('');
 
       // Reload inventory
@@ -570,77 +626,216 @@ const InventoryManagement: React.FC = () => {
                   </thead>
                   <tbody>
                     {filteredInventory.map(item => {
-                      const stockValue = item.current_stock * (item.unit_cost || 0);
+                      const variations = item.menu_items?.variations || [];
+                      const hasVariations = variations.length > 0;
+                      
+                      const totalVariationStock = variations.reduce((sum: number, v: any) => sum + (v.stock_on_hand || 0), 0);
+                      const totalVariationValue = variations.reduce((sum: number, v: any) => {
+                        const vCost = v.cost_price || v.price || 0;
+                        return sum + ((v.stock_on_hand || 0) * vCost);
+                      }, 0);
+                      
+                      const stockValue = hasVariations ? totalVariationValue : item.current_stock * (item.unit_cost || 0);
+                      
                       return (
-                        <tr
-                          key={item.id}
-                          className={`border-b border-pet-beige hover:bg-pet-cream ${item.is_out_of_stock ? 'bg-red-50' : item.is_low_stock ? 'bg-yellow-50' : ''
+                        <React.Fragment key={item.id}>
+                          <tr
+                            className={`border-b border-pet-beige hover:bg-pet-cream ${
+                              !hasVariations && item.current_stock <= 0 ? 'bg-red-50' : !hasVariations && item.is_low_stock ? 'bg-yellow-50' : ''
                             }`}
-                        >
-                          <td className="p-3">
-                            <div>
-                              <p className="font-semibold text-pet-brown">{item.menu_items?.name || 'Unknown'}</p>
-                              <p className="text-xs text-gray-500">{item.menu_items?.category}</p>
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center space-x-1 text-sm">
-                              <Barcode className="h-3 w-3 text-pet-orange" />
-                              <span className="text-gray-600">{item.sku || 'N/A'}</span>
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <span className={`text-2xl font-bold ${item.current_stock < 0
-                              ? 'text-red-800 bg-red-100 px-2 py-1 rounded'
-                              : item.is_out_of_stock
-                                ? 'text-red-600'
-                                : item.is_low_stock
-                                  ? 'text-yellow-600'
-                                  : 'text-pet-brown'
-                              }`}>
-                              {item.current_stock}
-                              {item.current_stock < 0 && (
-                                <span className="text-xs ml-2 text-red-700">(NEGATIVE!)</span>
+                          >
+                            <td className="p-3">
+                              <div className="flex items-center space-x-2">
+                                {hasVariations && (
+                                  <button
+                                    onClick={() => toggleExpand(item.id)}
+                                    className="p-1 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+                                    title={expandedItems[item.id] ? "Hide variations" : "Show variations"}
+                                  >
+                                    {expandedItems[item.id] ? (
+                                      <ChevronDown className="h-4 w-4 text-pet-orange" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4 text-pet-orange" />
+                                    )}
+                                  </button>
+                                )}
+                                <div>
+                                  <div className="flex items-center space-x-2">
+                                    <p
+                                      className={`font-semibold text-pet-brown ${hasVariations ? 'cursor-pointer hover:text-pet-orange-dark transition-colors' : ''}`}
+                                      onClick={() => hasVariations && toggleExpand(item.id)}
+                                    >
+                                      {item.menu_items?.name || 'Unknown'}
+                                    </p>
+                                    {hasVariations && (
+                                      <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">
+                                        {variations.length}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-500">{item.menu_items?.category}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center space-x-1 text-sm">
+                                <Barcode className="h-3 w-3 text-pet-orange" />
+                                <span className="text-gray-600">{item.sku || 'N/A'}</span>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              {hasVariations ? (
+                                <div className="flex flex-col">
+                                  <span className="text-xl font-bold text-pet-brown">{totalVariationStock}</span>
+                                  <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold bg-gray-100 px-1.5 py-0.5 rounded w-max mt-0.5">Via Variations</span>
+                                </div>
+                              ) : (
+                                <span className={`text-2xl font-bold ${item.current_stock < 0
+                                  ? 'text-red-800 bg-red-100 px-2 py-1 rounded'
+                                  : item.is_out_of_stock
+                                    ? 'text-red-600'
+                                    : item.is_low_stock
+                                      ? 'text-yellow-600'
+                                      : 'text-pet-brown'
+                                  }`}>
+                                  {item.current_stock}
+                                  {item.current_stock < 0 && (
+                                    <span className="text-xs ml-2 text-red-700">(NEGATIVE!)</span>
+                                  )}
+                                </span>
                               )}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <span className="text-gray-600">{item.minimum_stock}</span>
-                          </td>
-                          <td className="p-3">
-                            {item.is_out_of_stock ? (
-                              <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-bold">
-                                OUT OF STOCK
-                              </span>
-                            ) : item.is_low_stock ? (
-                              <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-bold">
-                                LOW STOCK
-                              </span>
-                            ) : (
-                              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">
-                                IN STOCK
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            <span className="text-gray-600">₱{(item.unit_cost || 0).toFixed(2)}</span>
-                          </td>
-                          <td className="p-3">
-                            <span className="font-bold text-green-600">₱{stockValue.toFixed(2)}</span>
-                          </td>
-                          <td className="p-3">
-                            <button
-                              onClick={() => {
-                                setSelectedItem(item);
-                                setNewStockAmount(item.current_stock.toString());
-                                setShowAdjustModal(true);
-                              }}
-                              className="text-pet-orange hover:text-pet-orange-dark"
-                            >
-                              <Edit className="h-5 w-5" />
-                            </button>
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="p-3">
+                              <span className="text-gray-600">{hasVariations ? '-' : item.minimum_stock}</span>
+                            </td>
+                            <td className="p-3">
+                              {hasVariations ? (
+                                <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-bold">
+                                  MULTIPLE
+                                </span>
+                              ) : item.is_out_of_stock ? (
+                                <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-bold">
+                                  OUT OF STOCK
+                                </span>
+                              ) : item.is_low_stock ? (
+                                <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-bold">
+                                  LOW STOCK
+                                </span>
+                              ) : (
+                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">
+                                  IN STOCK
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <span className="text-gray-600">{hasVariations ? '-' : `₱${(item.unit_cost || 0).toFixed(2)}`}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-bold text-green-600">₱{stockValue.toFixed(2)}</span>
+                            </td>
+                            <td className="p-3">
+                              {!hasVariations ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedItem(item);
+                                    setNewStockAmount(item.current_stock.toString());
+                                    setNewCostPrice('');
+                                    setNewMargin('');
+                                    setShowAdjustModal(true);
+                                  }}
+                                  className="text-pet-orange hover:text-pet-orange-dark"
+                                >
+                                  <Edit className="h-5 w-5" />
+                                </button>
+                              ) : (
+                                <span className="text-gray-400 text-xs">-</span>
+                              )}
+                            </td>
+                          </tr>
+                          {hasVariations && expandedItems[item.id] && variations.map(variation => {
+                            const vCostPrice = variation.cost_price || variation.price || 0;
+                            const vStockValue = (variation.stock_on_hand || 0) * vCostPrice;
+                            const vIsOutOfStock = (variation.stock_on_hand || 0) <= 0;
+                            const vIsLowStock = (variation.stock_on_hand || 0) <= 5;
+                            return (
+                              <tr
+                                key={variation.id}
+                                className="border-b border-pet-beige bg-orange-50/10 hover:bg-orange-50/20"
+                              >
+                                <td className="p-3 pl-8">
+                                  <div>
+                                    <p className="font-semibold text-pet-brown-dark text-sm">↳ {variation.name}</p>
+                                    <p className="text-xs text-gray-400">Variation</p>
+                                  </div>
+                                </td>
+                                <td className="p-3">
+                                  <span className="text-gray-400 text-xs">N/A</span>
+                                </td>
+                                <td className="p-3">
+                                  <span className={`text-xl font-bold ${variation.stock_on_hand < 0
+                                    ? 'text-red-800 bg-red-100 px-2 py-1 rounded'
+                                    : vIsOutOfStock
+                                      ? 'text-red-600'
+                                      : vIsLowStock
+                                        ? 'text-yellow-600'
+                                        : 'text-pet-brown'
+                                    }`}>
+                                    {variation.stock_on_hand || 0}
+                                  </span>
+                                </td>
+                                <td className="p-3">
+                                  <span className="text-gray-400 text-xs">-</span>
+                                </td>
+                                <td className="p-3">
+                                  {vIsOutOfStock ? (
+                                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-bold">
+                                      OUT OF STOCK
+                                    </span>
+                                  ) : vIsLowStock ? (
+                                    <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-bold">
+                                      LOW STOCK
+                                    </span>
+                                  ) : (
+                                    <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">
+                                      IN STOCK
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3">
+                                  <div className="text-sm">
+                                    <span className="text-gray-600 block">Cost: ₱{vCostPrice.toFixed(2)}</span>
+                                    <span className="text-xs text-gray-400 block">Margin: {variation.margin || 0}%</span>
+                                  </div>
+                                </td>
+                                <td className="p-3">
+                                  <span className="font-bold text-green-600">₱{vStockValue.toFixed(2)}</span>
+                                </td>
+                                <td className="p-3">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedItem({
+                                        ...item,
+                                        isVariation: true,
+                                        variationId: variation.id,
+                                        variationName: variation.name,
+                                        current_stock: variation.stock_on_hand || 0,
+                                        cost_price: vCostPrice,
+                                        margin: variation.margin || 0
+                                      });
+                                      setNewStockAmount((variation.stock_on_hand || 0).toString());
+                                      setNewCostPrice(vCostPrice.toString());
+                                      setNewMargin((variation.margin || 0).toString());
+                                      setShowAdjustModal(true);
+                                    }}
+                                    className="text-pet-orange hover:text-pet-orange-dark"
+                                  >
+                                    <Edit className="h-5 w-5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -676,6 +871,35 @@ const InventoryManagement: React.FC = () => {
                     </div>
                   </div>
 
+                  {selectedItem.isVariation && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-pet-brown mb-2">Cost Price (₱)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newCostPrice}
+                          onChange={(e) => setNewCostPrice(e.target.value)}
+                          className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange"
+                          placeholder="Cost price"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-pet-brown mb-2">Margin (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={newMargin}
+                          onChange={(e) => setNewMargin(e.target.value)}
+                          className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange"
+                          placeholder="Margin percentage"
+                          min="0"
+                        />
+                      </div>
+                    </>
+                  )}
+
                   <div>
                     <label className="block text-sm font-semibold text-pet-brown mb-2">Reason for Adjustment</label>
                     <select
@@ -696,7 +920,7 @@ const InventoryManagement: React.FC = () => {
                   <div className="flex items-center space-x-4 pt-4">
                     <button
                       onClick={handleAdjustStock}
-                      disabled={!newStockAmount || !adjustReason}
+                      disabled={!newStockAmount || !adjustReason || (selectedItem.isVariation && (!newCostPrice || !newMargin))}
                       className="flex-1 bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white py-3 rounded-lg font-bold hover:from-pet-orange-dark hover:to-pet-orange transition-all disabled:opacity-50"
                     >
                       Update Stock
@@ -706,6 +930,8 @@ const InventoryManagement: React.FC = () => {
                         setShowAdjustModal(false);
                         setSelectedItem(null);
                         setNewStockAmount('');
+                        setNewCostPrice('');
+                        setNewMargin('');
                         setAdjustReason('');
                       }}
                       className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"

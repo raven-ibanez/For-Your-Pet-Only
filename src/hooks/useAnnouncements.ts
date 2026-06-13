@@ -109,6 +109,22 @@ export const useAnnouncements = () => {
 
   useEffect(() => {
     fetchAnnouncements();
+
+    const announcementsChannel = supabase
+      .channel('announcements_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'announcements' },
+        () => {
+          console.log('🔄 Real-time update: announcements changed');
+          fetchAnnouncements();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(announcementsChannel);
+    };
   }, []);
 
   return {

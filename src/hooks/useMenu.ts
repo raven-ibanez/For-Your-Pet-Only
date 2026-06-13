@@ -71,7 +71,10 @@ export const useMenu = () => {
           variations: item.variations?.map(v => ({
             id: v.id,
             name: v.name,
-            price: v.price
+            price: v.price,
+            stock_on_hand: v.stock_on_hand,
+            cost_price: v.cost_price || v.price || 0,
+            margin: v.margin
           })) || [],
           addOns: item.add_ons?.map(a => ({
             id: a.id,
@@ -127,7 +130,10 @@ export const useMenu = () => {
             item.variations.map(v => ({
               menu_item_id: menuItem.id,
               name: v.name,
-              price: v.price
+              price: v.price,
+              stock_on_hand: v.stock_on_hand || 0,
+              cost_price: v.cost_price || 0,
+              margin: v.margin || 0
             }))
           );
 
@@ -212,7 +218,10 @@ export const useMenu = () => {
             updates.variations.map(v => ({
               menu_item_id: id,
               name: v.name,
-              price: v.price
+              price: v.price,
+              stock_on_hand: v.stock_on_hand || 0,
+              cost_price: v.cost_price || 0,
+              margin: v.margin || 0
             }))
           );
 
@@ -270,6 +279,46 @@ export const useMenu = () => {
 
   useEffect(() => {
     fetchMenuItems();
+
+    const menuItemsChannel = supabase
+      .channel('menu_items_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'menu_items' },
+        () => {
+          console.log('🔄 Real-time update: menu_items changed');
+          fetchMenuItems();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'variations' },
+        () => {
+          console.log('🔄 Real-time update: variations changed');
+          fetchMenuItems();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'add_ons' },
+        () => {
+          console.log('🔄 Real-time update: add_ons changed');
+          fetchMenuItems();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inventory' },
+        () => {
+          console.log('🔄 Real-time update: inventory changed');
+          fetchMenuItems();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(menuItemsChannel);
+    };
   }, []);
 
   return {

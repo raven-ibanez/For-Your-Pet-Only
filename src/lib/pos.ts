@@ -57,9 +57,18 @@ export interface InventoryItem {
   is_low_stock: boolean;
   is_out_of_stock: boolean;
   menu_items?: {
+    id: string;
     name: string;
     base_price: number;
     category: string;
+    variations?: {
+      id: string;
+      name: string;
+      price: number;
+      stock_on_hand: number;
+      cost_price: number;
+      margin: number;
+    }[];
   };
 }
 
@@ -782,14 +791,22 @@ export const posAPI = {
           id,
           name,
           base_price,
-          category
+          category,
+          variations (
+            id,
+            name,
+            price,
+            stock_on_hand,
+            cost_price,
+            margin
+          )
         )
       `)
       .eq('is_tracked', true)
       .order('current_stock', { ascending: true });
 
     if (error) throw error;
-    return data as InventoryItem[];
+    return data as any[];
   },
 
   async getLowStockItems() {

@@ -68,6 +68,10 @@ const PendingPayments: React.FC = () => {
   const handleProcessPayment = async () => {
     if (!selectedOrder) return;
 
+    const finalAmount = paymentMethod === 'qrph'
+      ? parseFloat((selectedOrder.total_amount * 1.01).toFixed(2))
+      : selectedOrder.total_amount;
+
     if (paymentMethod === 'cash' && (!amountPaid || parseFloat(amountPaid) < selectedOrder.total_amount)) {
       alert(`Amount paid must be at least ₱${selectedOrder.total_amount.toFixed(2)}`);
       return;
@@ -80,7 +84,7 @@ const PendingPayments: React.FC = () => {
       await posAPI.createPayment({
         order_id: selectedOrder.id,
         payment_method: paymentMethod,
-        amount: selectedOrder.total_amount,
+        amount: finalAmount,
         reference_number: paymentMethod !== 'cash' ? `PAID-${Date.now()}` : undefined
       });
 
@@ -90,7 +94,11 @@ const PendingPayments: React.FC = () => {
         .update({
           payment_status: 'paid',
           paid_at: new Date().toISOString(),
-          paid_amount: selectedOrder.total_amount
+          paid_amount: finalAmount,
+          total_amount: finalAmount,
+          notes: paymentMethod === 'qrph'
+            ? `${selectedOrder.notes || ''} | Includes QR PH 1% Fee`.trim()
+            : selectedOrder.notes
         })
         .eq('id', selectedOrder.id);
 
@@ -298,9 +306,14 @@ const PendingPayments: React.FC = () => {
                 <select
                   value={paymentMethod}
                   onChange={(e) => {
-                    setPaymentMethod(e.target.value);
-                    if (e.target.value !== 'cash') {
+                    const method = e.target.value;
+                    setPaymentMethod(method);
+                    if (method === 'qrph' && selectedOrder) {
+                      setAmountPaid((selectedOrder.total_amount * 1.01).toFixed(2));
+                    } else if (method !== 'cash' && selectedOrder) {
                       setAmountPaid(selectedOrder.total_amount.toFixed(2));
+                    } else {
+                      setAmountPaid('');
                     }
                   }}
                   className="w-full px-4 py-3 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange"
@@ -309,6 +322,7 @@ const PendingPayments: React.FC = () => {
                   <option value="card">💳 Card</option>
                   <option value="gcash">📱 GCash</option>
                   <option value="maya">📱 Maya</option>
+                  <option value="qrph">📱 QRPH (+1%)</option>
                 </select>
               </div>
 

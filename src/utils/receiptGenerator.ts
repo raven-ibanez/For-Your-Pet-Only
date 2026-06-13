@@ -18,9 +18,9 @@ export interface ReceiptData {
   total: number;
   paymentMethod: string;
   amountPaid?: number;
-  change?: number;
   isPayLater?: boolean;
   multiPayments?: Array<{ method: string; amount: number }>;
+  qrphFee?: number;
 }
 
 export const generateReceipt = (data: ReceiptData) => {
@@ -264,6 +264,12 @@ export const generateReceipt = (data: ReceiptData) => {
         <div class="total-row">
           <span class="total-label">Delivery Fee:</span>
           <span class="total-value" style="color: #388e3c;">+${formatCurrency(data.deliveryFee)}</span>
+        </div>
+      ` : ''}
+      ${data.qrphFee && data.qrphFee > 0 ? `
+        <div class="total-row">
+          <span class="total-label">QR PH Fee (1%):</span>
+          <span class="total-value" style="color: #ff9800;">+${formatCurrency(data.qrphFee)}</span>
         </div>
       ` : ''}
       <div class="total-row final-total">
