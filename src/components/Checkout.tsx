@@ -19,6 +19,8 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
   const [step, setStep] = useState<'details' | 'payment' | 'success'>('details');
   const [createdOrderNumber, setCreatedOrderNumber] = useState('');
   const [generatedMessengerUrl, setGeneratedMessengerUrl] = useState('');
+  const [createdOrderDetails, setCreatedOrderDetails] = useState('');
+  const [copied, setCopied] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('pickup');
@@ -252,6 +254,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
 
       setCreatedOrderNumber(order.order_number);
       setGeneratedMessengerUrl(messengerUrl);
+      setCreatedOrderDetails(orderDetails);
       setStep('success');
 
     } catch (error: any) {
@@ -930,17 +933,21 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           Order number: <strong className="text-pet-orange-dark text-lg">#{createdOrderNumber}</strong>
         </p>
         
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-8 text-left w-full">
-          <p className="text-sm text-amber-800 font-semibold mb-1">💡 What to do next:</p>
-          <ol className="text-xs text-amber-700 space-y-1 list-decimal list-inside">
-            <li>Click the button below to open Facebook Messenger.</li>
-            <li>Send the generated order summary message.</li>
-            <li>Attach your payment screenshot to confirm.</li>
-          </ol>
+        <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 mb-6 text-left w-full space-y-2">
+          <p className="text-sm text-green-800 font-bold flex items-center">
+            📋 Order Details Copied!
+          </p>
+          <p className="text-xs text-green-700 leading-relaxed">
+            The complete order summary has been automatically copied. Once Messenger opens, simply <strong>Paste (Ctrl+V or Long Press)</strong> in the chat to send your order.
+          </p>
         </div>
 
         <button
           onClick={() => {
+            if (navigator.clipboard) {
+              navigator.clipboard.writeText(createdOrderDetails);
+              setCopied(true);
+            }
             window.open(generatedMessengerUrl, '_blank');
           }}
           className="w-full bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white py-4 rounded-xl font-bold text-lg hover:from-pet-orange-dark hover:to-pet-orange hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg mb-4 flex items-center justify-center space-x-2"
@@ -948,10 +955,21 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
           <span>💬 Open Facebook Messenger</span>
         </button>
 
+        {copied && (
+          <p className="text-sm text-green-600 font-semibold mb-4 animate-bounce">
+            ✓ Copied to clipboard! Ready to paste.
+          </p>
+        )}
+
         <p className="text-xs text-gray-500">
           Didn't open?{" "}
           <a
             href={generatedMessengerUrl}
+            onClick={() => {
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(createdOrderDetails);
+              }
+            }}
             target="_blank"
             rel="noopener noreferrer"
             className="text-pet-orange hover:underline font-semibold"
