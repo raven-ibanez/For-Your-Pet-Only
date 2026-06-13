@@ -16,7 +16,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
   const { paymentMethods } = usePaymentMethods();
   const { menuItems } = useMenu();
   const { subdivisions, globalSettings } = useDeliverySettings();
-  const [step, setStep] = useState<'details' | 'payment'>('details');
+  const [step, setStep] = useState<'details' | 'payment' | 'success'>('details');
+  const [createdOrderNumber, setCreatedOrderNumber] = useState('');
+  const [generatedMessengerUrl, setGeneratedMessengerUrl] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('pickup');
@@ -107,9 +109,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
 
   const handlePlaceOrder = async () => {
     if (isProcessing) return;
-
-    // Open a blank window immediately in the synchronous click event to prevent popup blockers
-    const messengerWindow = window.open('about:blank', '_blank');
 
     try {
       setIsProcessing(true);
@@ -251,23 +250,11 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
       const encodedMessage = encodeURIComponent(orderDetails);
       const messengerUrl = `https://m.me/100310379306836?text=${encodedMessage}`;
 
-      // Redirect the already-opened blank window to the messenger URL
-      if (messengerWindow) {
-        messengerWindow.location.href = messengerUrl;
-      } else {
-        // Fallback direct redirection if window creation failed completely
-        window.open(messengerUrl, '_blank');
-      }
-
-      // Show success message
-      setTimeout(() => {
-        alert(`✅ Order ${order.order_number} created successfully!\n\nStock levels have been updated.`);
-      }, 100);
+      setCreatedOrderNumber(order.order_number);
+      setGeneratedMessengerUrl(messengerUrl);
+      setStep('success');
 
     } catch (error: any) {
-      if (messengerWindow) {
-        messengerWindow.close();
-      }
       console.error('❌ Error creating order:', error);
       alert(`Failed to create order: ${error.message}\n\nPlease try again or contact support.`);
     } finally {
@@ -631,300 +618,347 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
   }
 
   // Payment Step
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center mb-8">
-        <button
-          onClick={() => setStep('details')}
-          className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
-        >
-          <ArrowLeft className="h-5 w-5" />
-          <span>Back to Details</span>
-        </button>
-        <h1 className="text-3xl font-noto font-semibold text-black ml-8">Payment</h1>
-      </div>
+  if (step === 'payment') {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="flex items-center mb-8">
+          <button
+            onClick={() => setStep('details')}
+            className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            <span>Back to Details</span>
+          </button>
+          <h1 className="text-3xl font-noto font-semibold text-black ml-8">Payment</h1>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Payment Method Selection */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="text-2xl font-noto font-medium text-black mb-6">Choose Payment Method</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Payment Method Selection */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-2xl font-noto font-medium text-black mb-6">Choose Payment Method</h2>
 
-          <div className="grid grid-cols-1 gap-4 mb-6">
-            {/* Cash Payment Option */}
-            <button
-              type="button"
-              onClick={() => {
-                setPaymentMethod('cash');
-                setCashAmountPaid('');
-                setCashChangeNeeded('');
-              }}
-              className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${paymentMethod === 'cash'
-                ? 'border-pet-orange bg-pet-orange text-white'
-                : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
-                }`}
-            >
-              <span className="text-2xl">💵</span>
-              <span className="font-medium">Cash</span>
-            </button>
-
-            {/* Other Payment Methods */}
-            {paymentMethods.map((method) => (
+            <div className="grid grid-cols-1 gap-4 mb-6">
+              {/* Cash Payment Option */}
               <button
-                key={method.id}
                 type="button"
                 onClick={() => {
-                  setPaymentMethod(method.id as PaymentMethod);
+                  setPaymentMethod('cash');
                   setCashAmountPaid('');
                   setCashChangeNeeded('');
                 }}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${paymentMethod === method.id
+                className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${paymentMethod === 'cash'
                   ? 'border-pet-orange bg-pet-orange text-white'
                   : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
                   }`}
               >
-                <span className="text-2xl">💳</span>
-                <span className="font-medium">{method.name}</span>
+                <span className="text-2xl">💵</span>
+                <span className="font-medium">Cash</span>
               </button>
-            ))}
-          </div>
 
-          {/* Cash Payment Details */}
-          {paymentMethod === 'cash' && (
-            <div className="bg-green-50 rounded-lg p-6 mb-6 border-2 border-green-200">
-              <h3 className="font-medium text-black mb-4">💵 Cash Payment Details</h3>
+              {/* Other Payment Methods */}
+              {paymentMethods.map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod(method.id as PaymentMethod);
+                    setCashAmountPaid('');
+                    setCashChangeNeeded('');
+                  }}
+                  className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${paymentMethod === method.id
+                    ? 'border-pet-orange bg-pet-orange text-white'
+                    : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
+                    }`}
+                >
+                  <span className="text-2xl">💳</span>
+                  <span className="font-medium">{method.name}</span>
+                </button>
+              ))}
+            </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Amount to be Paid *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={finalTotal}
-                    value={cashAmountPaid}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setCashAmountPaid(value);
-                      setCashChangeNeeded('');
-                    }}
-                    className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
-                    placeholder={`₱${finalTotal.toFixed(2)}`}
-                    required={paymentMethod === 'cash'}
-                  />
-                  <p className="text-xs text-gray-600 mt-1">
-                    {qrphFee > 0 ? (
-                      <>
-                        Subtotal: ₱{totalPrice.toFixed(2)}<br />
-                        QR PH Fee (1%): ₱{qrphFee.toFixed(2)}<br />
-                        {deliveryFee > 0 && (<>Delivery Fee: ₱{deliveryFee.toFixed(2)}<br /></>)}
-                        <span className="font-semibold">Total: ₱{finalTotal.toFixed(2)}</span>
-                      </>
-                    ) : deliveryFee > 0 ? (
-                      <>
-                        Subtotal: ₱{totalPrice.toFixed(2)}<br />
-                        Delivery Fee: ₱{deliveryFee.toFixed(2)}<br />
-                        <span className="font-semibold">Total: ₱{finalTotal.toFixed(2)}</span>
-                      </>
-                    ) : (
-                      `Total amount: ₱${totalPrice.toFixed(2)}`
-                    )}
-                  </p>
-                </div>
+            {/* Cash Payment Details */}
+            {paymentMethod === 'cash' && (
+              <div className="bg-green-50 rounded-lg p-6 mb-6 border-2 border-green-200">
+                <h3 className="font-medium text-black mb-4">💵 Cash Payment Details</h3>
 
-                {cashAmountPaid && parseFloat(cashAmountPaid) >= finalTotal && (
-                  <div className="bg-white rounded-lg p-4 border-2 border-green-300">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Change:</span>
-                      <span className="text-xl font-bold text-green-600">₱{cashChange}</span>
-                    </div>
-                    {cashChangeNeeded && (
-                      <p className="text-xs text-gray-600 mt-2">
-                        📝 {cashChangeNeeded}
-                      </p>
-                    )}
-                    {parseFloat(cashChange) > 0 && (
-                      <p className="text-xs text-green-700 mt-2">
-                        ✓ Please prepare change of ₱{cashChange}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {cashAmountPaid && parseFloat(cashAmountPaid) < finalTotal && (
-                  <div className="bg-red-50 rounded-lg p-3 border border-red-200">
-                    <p className="text-sm text-red-600">
-                      ⚠️ Amount paid (₱{parseFloat(cashAmountPaid).toFixed(2)}) is less than total (₱{finalTotal.toFixed(2)})
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-black mb-2">
+                      Amount to be Paid *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={finalTotal}
+                      value={cashAmountPaid}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setCashAmountPaid(value);
+                        setCashChangeNeeded('');
+                      }}
+                      className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
+                      placeholder={`₱${finalTotal.toFixed(2)}`}
+                      required={paymentMethod === 'cash'}
+                    />
+                    <p className="text-xs text-gray-600 mt-1">
+                      {qrphFee > 0 ? (
+                        <>
+                          Subtotal: ₱{totalPrice.toFixed(2)}<br />
+                          QR PH Fee (1%): ₱{qrphFee.toFixed(2)}<br />
+                          {deliveryFee > 0 && (<>Delivery Fee: ₱{deliveryFee.toFixed(2)}<br /></>)}
+                          <span className="font-semibold">Total: ₱{finalTotal.toFixed(2)}</span>
+                        </>
+                      ) : deliveryFee > 0 ? (
+                        <>
+                          Subtotal: ₱{totalPrice.toFixed(2)}<br />
+                          Delivery Fee: ₱{deliveryFee.toFixed(2)}<br />
+                          <span className="font-semibold">Total: ₱{finalTotal.toFixed(2)}</span>
+                        </>
+                      ) : (
+                        `Total amount: ₱${totalPrice.toFixed(2)}`
+                      )}
                     </p>
                   </div>
-                )}
 
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Additional Notes (Optional)
-                  </label>
-                  <textarea
-                    value={cashChangeNeeded}
-                    onChange={(e) => setCashChangeNeeded(e.target.value)}
-                    className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    rows={2}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Payment Details with QR Code */}
-          {selectedPaymentMethod && paymentMethod !== 'cash' && (
-            <div className="bg-pet-beige rounded-lg p-6 mb-6">
-              <h3 className="font-medium text-black mb-4">Payment Details</h3>
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600 mb-1">{selectedPaymentMethod.name}</p>
-                  <p className="font-mono text-black font-medium">{selectedPaymentMethod.account_number}</p>
-                  <p className="text-sm text-gray-600 mb-3">Account Name: {selectedPaymentMethod.account_name}</p>
-                  {qrphFee > 0 && (
-                    <div className="mb-2">
-                      <p className="text-sm text-gray-600">Subtotal: ₱{totalPrice.toFixed(2)}</p>
-                      <p className="text-sm text-orange-600 font-semibold">QR PH Fee (1%): ₱{qrphFee.toFixed(2)}</p>
+                  {cashAmountPaid && parseFloat(cashAmountPaid) >= finalTotal && (
+                    <div className="bg-white rounded-lg p-4 border-2 border-green-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700">Change:</span>
+                        <span className="text-xl font-bold text-green-600">₱{cashChange}</span>
+                      </div>
+                      {cashChangeNeeded && (
+                        <p className="text-xs text-gray-600 mt-2">
+                          📝 {cashChangeNeeded}
+                        </p>
+                      )}
+                      {parseFloat(cashChange) > 0 && (
+                        <p className="text-xs text-green-700 mt-2">
+                          ✓ Please prepare change of ₱{cashChange}
+                        </p>
+                      )}
                     </div>
                   )}
-                  {deliveryFee > 0 && (
-                    <p className="text-sm text-pet-orange font-semibold">Delivery Fee: ₱{deliveryFee.toFixed(2)}</p>
+
+                  {cashAmountPaid && parseFloat(cashAmountPaid) < finalTotal && (
+                    <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                      <p className="text-sm text-red-600">
+                        ⚠️ Amount paid (₱{parseFloat(cashAmountPaid).toFixed(2)}) is less than total (₱{finalTotal.toFixed(2)})
+                      </p>
+                    </div>
                   )}
-                  <p className="text-xl font-semibold text-black">Amount: ₱{finalTotal.toFixed(2)}</p>
-                </div>
-                <div className="flex-shrink-0">
-                  <img
-                    src={selectedPaymentMethod.qr_code_url}
-                    alt={`${selectedPaymentMethod.name} QR Code`}
-                    className="w-32 h-32 rounded-lg border-2 border-pet-orange/30 shadow-sm"
-                    onError={(e) => {
-                      e.currentTarget.src = 'https://images.pexels.com/photos/8867482/pexels-photo-8867482.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop';
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 text-center mt-2">Scan to pay</p>
+
+                  <div>
+                    <label className="block text-sm font-medium text-black mb-2">
+                      Additional Notes (Optional)
+                    </label>
+                    <textarea
+                      value={cashChangeNeeded}
+                      onChange={(e) => setCashChangeNeeded(e.target.value)}
+                      className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      rows={2}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Reference Number - Only show for non-cash payments */}
-          {paymentMethod !== 'cash' && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h4 className="font-medium text-black mb-2">📸 Payment Proof Required</h4>
-              <p className="text-sm text-gray-700">
-                After making your payment, please take a screenshot of your payment receipt and attach it when you send your order via Messenger. This helps us verify and process your order quickly.
-              </p>
-            </div>
-          )}
-        </div>
+            {/* Payment Details with QR Code */}
+            {selectedPaymentMethod && paymentMethod !== 'cash' && (
+              <div className="bg-pet-beige rounded-lg p-6 mb-6">
+                <h3 className="font-medium text-black mb-4">Payment Details</h3>
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600 mb-1">{selectedPaymentMethod.name}</p>
+                    <p className="font-mono text-black font-medium">{selectedPaymentMethod.account_number}</p>
+                    <p className="text-sm text-gray-600 mb-3">Account Name: {selectedPaymentMethod.account_name}</p>
+                    {qrphFee > 0 && (
+                      <div className="mb-2">
+                        <p className="text-sm text-gray-600">Subtotal: ₱{totalPrice.toFixed(2)}</p>
+                        <p className="text-sm text-orange-600 font-semibold">QR PH Fee (1%): ₱{qrphFee.toFixed(2)}</p>
+                      </div>
+                    )}
+                    {deliveryFee > 0 && (
+                      <p className="text-sm text-pet-orange font-semibold">Delivery Fee: ₱{deliveryFee.toFixed(2)}</p>
+                    )}
+                    <p className="text-xl font-semibold text-black">Amount: ₱{finalTotal.toFixed(2)}</p>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <img
+                      src={selectedPaymentMethod.qr_code_url}
+                      alt={`${selectedPaymentMethod.name} QR Code`}
+                      className="w-32 h-32 rounded-lg border-2 border-pet-orange/30 shadow-sm"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://images.pexels.com/photos/8867482/pexels-photo-8867482.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop';
+                      }}
+                    />
+                    <p className="text-xs text-gray-500 text-center mt-2">Scan to pay</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-        {/* Order Summary */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="text-2xl font-noto font-medium text-black mb-6">Final Order Summary</h2>
-
-          <div className="space-y-4 mb-6">
-            <div className="bg-pet-beige rounded-lg p-4">
-              <h4 className="font-medium text-black mb-2">Customer Details</h4>
-              <p className="text-sm text-gray-600">Name: {customerName}</p>
-              <p className="text-sm text-gray-600">Contact: {contactNumber}</p>
-              <p className="text-sm text-gray-600">
-                Service: {serviceType === 'pickup' ? 'PICK-UP' : serviceType === 'store-delivery' ? 'STORE DELIVERY RIDER' : 'LALAMOVE'}
-              </p>
-              {serviceType === 'store-delivery' && selectedSubdivision && (
-                <>
-                  <p className="text-sm text-gray-600">Subdivision: {selectedSubdivision.name}</p>
-                  <p className="text-sm text-gray-600">
-                    Address: Phase {phase}, Block {block}, Lot {lot}, {streetName}
-                  </p>
-                  {pinAddress && <p className="text-sm text-gray-600">Pin: {pinAddress}</p>}
-                  {deliveryLandmark && <p className="text-sm text-gray-600">Landmark: {deliveryLandmark}</p>}
-                  <p className="text-sm text-pet-orange font-medium">
-                    Delivery Fee: {globalSettings.free_delivery_promo ? 'FREE (Promo)' : `₱${deliveryFee.toFixed(2)}`}
-                  </p>
-                </>
-              )}
-              {serviceType === 'lalamove' && (
-                <>
-                  <p className="text-sm text-gray-600">Address: {lalamoveAddress}</p>
-                  {lalamoveNote && <p className="text-sm text-gray-600">Note: {lalamoveNote}</p>}
-                </>
-              )}
-              {serviceType === 'pickup' && (
-                <p className="text-sm text-gray-600">
-                  Pickup Time: {pickupTime === 'custom' ? customTime : `${pickupTime} minutes`}
+            {/* Reference Number - Only show for non-cash payments */}
+            {paymentMethod !== 'cash' && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 className="font-medium text-black mb-2">📸 Payment Proof Required</h4>
+                <p className="text-sm text-gray-700">
+                  After making your payment, please take a screenshot of your payment receipt and attach it when you send your order via Messenger. This helps us verify and process your order quickly.
                 </p>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
 
-            {cartItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between py-2 border-b border-pet-beige">
-                <div>
-                  <h4 className="font-medium text-black">{item.name}</h4>
-                  {item.selectedVariation && (
-                    <p className="text-sm text-gray-600">Size: {item.selectedVariation.name}</p>
-                  )}
-                  {item.selectedAddOns && item.selectedAddOns.length > 0 && (
+          {/* Order Summary */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-2xl font-noto font-medium text-black mb-6">Final Order Summary</h2>
+
+            <div className="space-y-4 mb-6">
+              <div className="bg-pet-beige rounded-lg p-4">
+                <h4 className="font-medium text-black mb-2">Customer Details</h4>
+                <p className="text-sm text-gray-600">Name: {customerName}</p>
+                <p className="text-sm text-gray-600">Contact: {contactNumber}</p>
+                <p className="text-sm text-gray-600">
+                  Service: {serviceType === 'pickup' ? 'PICK-UP' : serviceType === 'store-delivery' ? 'STORE DELIVERY RIDER' : 'LALAMOVE'}
+                </p>
+                {serviceType === 'store-delivery' && selectedSubdivision && (
+                  <>
+                    <p className="text-sm text-gray-600">Subdivision: {selectedSubdivision.name}</p>
                     <p className="text-sm text-gray-600">
-                      Add-ons: {item.selectedAddOns.map(addOn =>
-                        addOn.quantity && addOn.quantity > 1
-                          ? `${addOn.name} x${addOn.quantity}`
-                          : addOn.name
-                      ).join(', ')}
+                      Address: Phase {phase}, Block {block}, Lot {lot}, {streetName}
                     </p>
-                  )}
-                  <p className="text-sm text-gray-600">₱{item.totalPrice} x {item.quantity}</p>
-                </div>
-                <span className="font-semibold text-black">₱{item.totalPrice * item.quantity}</span>
+                    {pinAddress && <p className="text-sm text-gray-600">Pin: {pinAddress}</p>}
+                    {deliveryLandmark && <p className="text-sm text-gray-600">Landmark: {deliveryLandmark}</p>}
+                    <p className="text-sm text-pet-orange font-medium">
+                      Delivery Fee: {globalSettings.free_delivery_promo ? 'FREE (Promo)' : `₱${deliveryFee.toFixed(2)}`}
+                    </p>
+                  </>
+                )}
+                {serviceType === 'lalamove' && (
+                  <>
+                    <p className="text-sm text-gray-600">Address: {lalamoveAddress}</p>
+                    {lalamoveNote && <p className="text-sm text-gray-600">Note: {lalamoveNote}</p>}
+                  </>
+                )}
+                {serviceType === 'pickup' && (
+                  <p className="text-sm text-gray-600">
+                    Pickup Time: {pickupTime === 'custom' ? customTime : `${pickupTime} minutes`}
+                  </p>
+                )}
               </div>
-            ))}
-          </div>
 
-          <div className="border-t border-pet-orange/20 pt-4 mb-6">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm text-gray-600">
-                <span>Subtotal:</span>
-                <span>₱{totalPrice.toFixed(2)}</span>
-              </div>
-              {qrphFee > 0 && (
-                <div className="flex items-center justify-between text-sm text-orange-600">
-                  <span>QR PH Fee (1%):</span>
-                  <span>₱{qrphFee.toFixed(2)}</span>
+              {cartItems.map((item) => (
+                <div key={item.id} className="flex items-center justify-between py-2 border-b border-pet-beige">
+                  <div>
+                    <h4 className="font-medium text-black">{item.name}</h4>
+                    {item.selectedVariation && (
+                      <p className="text-sm text-gray-600">Size: {item.selectedVariation.name}</p>
+                    )}
+                    {item.selectedAddOns && item.selectedAddOns.length > 0 && (
+                      <p className="text-sm text-gray-600">
+                        Add-ons: {item.selectedAddOns.map(addOn =>
+                          addOn.quantity && addOn.quantity > 1
+                            ? `${addOn.name} x${addOn.quantity}`
+                            : addOn.name
+                        ).join(', ')}
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-600">₱{item.totalPrice} x {item.quantity}</p>
+                  </div>
+                  <span className="font-semibold text-black">₱{item.totalPrice * item.quantity}</span>
                 </div>
-              )}
-              {serviceType === 'store-delivery' && selectedSubdivision && (
-                <div className="flex items-center justify-between text-sm text-pet-orange">
-                  <span>🛵 Delivery Fee ({selectedSubdivision.name}):</span>
-                  <span>{globalSettings.free_delivery_promo ? <span className="text-green-600 font-medium">FREE</span> : `₱${deliveryFee.toFixed(2)}`}</span>
+              ))}
+            </div>
+
+            <div className="border-t border-pet-orange/20 pt-4 mb-6">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <span>Subtotal:</span>
+                  <span>₱{totalPrice.toFixed(2)}</span>
                 </div>
-              )}
-              <div className="flex items-center justify-between text-2xl font-noto font-semibold text-black pt-2 border-t border-pet-beige">
-                <span>Total:</span>
-                <span className="font-bold text-lg">₱{finalTotal.toFixed(2)}</span>
+                {qrphFee > 0 && (
+                  <div className="flex items-center justify-between text-sm text-orange-600">
+                    <span>QR PH Fee (1%):</span>
+                    <span>₱{qrphFee.toFixed(2)}</span>
+                  </div>
+                )}
+                {serviceType === 'store-delivery' && selectedSubdivision && (
+                  <div className="flex items-center justify-between text-sm text-pet-orange">
+                    <span>🛵 Delivery Fee ({selectedSubdivision.name}):</span>
+                    <span>{globalSettings.free_delivery_promo ? <span className="text-green-600 font-medium">FREE</span> : `₱${deliveryFee.toFixed(2)}`}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-2xl font-noto font-semibold text-black pt-2 border-t border-pet-beige">
+                  <span>Total:</span>
+                  <span className="font-bold text-lg">₱{finalTotal.toFixed(2)}</span>
+                </div>
               </div>
             </div>
+
+            <button
+              onClick={handlePlaceOrder}
+              disabled={
+                isProcessing ||
+                (paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal))
+              }
+              className={`w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${isProcessing ||
+                (paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal))
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-pet-orange text-white hover:bg-pet-orange-dark hover:scale-[1.02]'
+                }`}
+            >
+              {isProcessing ? 'Processing Order...' : 'Place Order via Messenger'}
+            </button>
+
+            <p className="text-xs text-gray-500 text-center mt-3">
+              You'll be redirected to Facebook Messenger to confirm your order. Don't forget to attach your payment screenshot!
+            </p>
           </div>
-
-          <button
-            onClick={handlePlaceOrder}
-            disabled={
-              isProcessing ||
-              (paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal))
-            }
-            className={`w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${isProcessing ||
-              (paymentMethod === 'cash' && (!cashAmountPaid || parseFloat(cashAmountPaid) < finalTotal))
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-pet-orange text-white hover:bg-pet-orange-dark hover:scale-[1.02]'
-              }`}
-          >
-            {isProcessing ? 'Processing Order...' : 'Place Order via Messenger'}
-          </button>
-
-          <p className="text-xs text-gray-500 text-center mt-3">
-            You'll be redirected to Facebook Messenger to confirm your order. Don't forget to attach your payment screenshot!
-          </p>
         </div>
+      </div>
+    );
+  }
+
+  // Success Step
+  return (
+    <div className="max-w-md mx-auto px-4 py-16 text-center">
+      <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-pet-orange flex flex-col items-center">
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 text-5xl">
+          🐾
+        </div>
+        <h1 className="text-3xl font-display font-bold text-pet-brown mb-2">Order Created!</h1>
+        <p className="text-pet-gray-medium mb-6">
+          Order number: <strong className="text-pet-orange-dark text-lg">#{createdOrderNumber}</strong>
+        </p>
+        
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-8 text-left w-full">
+          <p className="text-sm text-amber-800 font-semibold mb-1">💡 What to do next:</p>
+          <ol className="text-xs text-amber-700 space-y-1 list-decimal list-inside">
+            <li>Click the button below to open Facebook Messenger.</li>
+            <li>Send the generated order summary message.</li>
+            <li>Attach your payment screenshot to confirm.</li>
+          </ol>
+        </div>
+
+        <button
+          onClick={() => {
+            window.open(generatedMessengerUrl, '_blank');
+          }}
+          className="w-full bg-gradient-to-r from-pet-orange to-pet-orange-dark text-white py-4 rounded-xl font-bold text-lg hover:from-pet-orange-dark hover:to-pet-orange hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg mb-4 flex items-center justify-center space-x-2"
+        >
+          <span>💬 Open Facebook Messenger</span>
+        </button>
+
+        <p className="text-xs text-gray-500">
+          Didn't open?{" "}
+          <a
+            href={generatedMessengerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-pet-orange hover:underline font-semibold"
+          >
+            Click here to retry
+          </a>
+        </p>
       </div>
     </div>
   );
