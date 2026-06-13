@@ -16,7 +16,7 @@ interface CartItem {
 }
 
 const QuickSale: React.FC = () => {
-  const { menuItems, loading: productsLoading } = useMenu();
+  const { menuItems, loading: productsLoading, refetch: refetchMenu } = useMenu();
   const { siteSettings } = useSiteSettings();
   const { categories } = useCategories();
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -177,18 +177,16 @@ const QuickSale: React.FC = () => {
     const cartItemName = `${product.name} (${variation.name})`;
     const price = variation.price;
     
-    // Check stock constraints using base product ID
-    if (product.isTracked && product.currentStock !== undefined) {
-      const existingItemsOfProduct = cart.filter(item => item.id.startsWith(product.id));
-      const totalQtyInCart = existingItemsOfProduct.reduce((sum, item) => sum + item.quantity, 0);
-      
-      if (totalQtyInCart + 1 > product.currentStock) {
-        alert(`Sorry, only ${product.currentStock} units available in total for ${product.name}.`);
-        return;
-      }
+    const existingItem = cart.find(item => item.id === cartItemId);
+    const qtyInCart = existingItem ? existingItem.quantity : 0;
+    
+    // Check variation-specific stock constraints
+    const stockLeft = variation.stock_on_hand !== undefined ? variation.stock_on_hand : 0;
+    if (qtyInCart + 1 > stockLeft) {
+      alert(`Sorry, only ${stockLeft} units available for ${product.name} (${variation.name}).`);
+      return;
     }
     
-    const existingItem = cart.find(item => item.id === cartItemId);
     if (existingItem) {
       setCart(cart.map(item =>
         item.id === cartItemId
@@ -214,16 +212,22 @@ const QuickSale: React.FC = () => {
         
         // Check stock availability when increasing quantity
         if (change > 0) {
-          const baseProductId = id.includes('-') ? id.split('-')[0] : id;
+          const isVariation = id.includes('-') && id.split('-').length > 5;
+          const baseProductId = isVariation ? id.split('-').slice(0, 5).join('-') : id;
+          const variationId = isVariation ? id.split('-').slice(5).join('-') : null;
+          
           const product = menuItems.find(p => p.id === baseProductId);
-          if (product?.isTracked && product.currentStock !== undefined) {
-            const existingItemsOfProduct = cart.filter(item => item.id.startsWith(product.id));
-            const totalQtyInCart = existingItemsOfProduct.reduce((sum, item) => 
-              item.id === id ? sum + newQuantity : sum + item.quantity
-            , 0);
-            
-            if (totalQtyInCart > product.currentStock) {
-              alert(`Sorry, only ${product.currentStock} units available in total for ${product.name}.`);
+          
+          if (isVariation && variationId) {
+            const variation = product?.variations?.find(v => v.id === variationId);
+            const stockLeft = variation?.stock_on_hand !== undefined ? variation.stock_on_hand : 0;
+            if (newQuantity > stockLeft) {
+              alert(`Sorry, only ${stockLeft} units available for ${item.name}.`);
+              return item;
+            }
+          } else if (product?.isTracked && product.currentStock !== undefined) {
+            if (newQuantity > product.currentStock) {
+              alert(`Sorry, only ${product.currentStock} units available for ${product.name}.`);
               return item;
             }
           }
@@ -651,6 +655,9 @@ const QuickSale: React.FC = () => {
       setMultiPayments([]);
       setDiscount('');
       setDeliveryFee('');
+      
+      // Refresh local product stock states
+      refetchMenu();
 
       // Hide success message after 5 seconds
       setTimeout(() => setShowSuccess(false), 5000);
@@ -1359,57 +1366,60 @@ const QuickSale: React.FC = () => {
       </div>
       
       {/* Variation Selection Modal */}
-      {selectedProductForVariations && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border-2 border-pet-orange">
-            <div className="flex items-center justify-between mb-4 border-b border-pet-beige pb-2">
-              <h3 className="text-xl font-bold text-pet-orange-dark">Choose Variation</h3>
-              <button 
-                onClick={() => setSelectedProductForVariations(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            
-            <p className="text-sm font-semibold text-pet-brown mb-4">{selectedProductForVariations.name}</p>
-            
-            <div className="space-y-3">
-              {selectedProductForVariations.variations?.map((variation: any) => {
-                const stockLeft = variation.stock_on_hand !== undefined ? variation.stock_on_hand : 0;
-                const isOutOfStock = stockLeft <= 0;
-                
-                return (
-                  <button
-                    key={variation.id}
-                    onClick={() => handleSelectVariation(selectedProductForVariations, variation)}
-                    disabled={isOutOfStock}
-                    className={`w-full p-4 border-2 rounded-lg text-left font-semibold text-pet-brown transition-colors flex justify-between items-center ${
-                      isOutOfStock
-                        ? 'border-red-300 bg-red-50 opacity-60 cursor-not-allowed'
-                        : 'border-pet-orange hover:bg-pet-cream'
-                    }`}
-                  >
-                    <div>
-                      <span>{variation.name}</span>
-                      <span className={`text-xs ml-2 px-1.5 py-0.5 rounded font-bold ${
-                        isOutOfStock 
-                          ? 'bg-red-100 text-red-800' 
-                          : stockLeft <= 5 
-                            ? 'bg-yellow-100 text-yellow-800' 
-                            : 'bg-green-100 text-green-800'
-                      }`}>
-                        {isOutOfStock ? 'Out of Stock' : `${stockLeft} left`}
-                      </span>
-                    </div>
-                    <span className="text-pet-orange-dark text-lg">₱{variation.price.toFixed(2)}</span>
-                  </button>
-                );
-              })}
+      {selectedProductForVariations && (() => {
+        const currentSelectedProduct = menuItems.find(p => p.id === selectedProductForVariations.id) || selectedProductForVariations;
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border-2 border-pet-orange">
+              <div className="flex items-center justify-between mb-4 border-b border-pet-beige pb-2">
+                <h3 className="text-xl font-bold text-pet-orange-dark">Choose Variation</h3>
+                <button 
+                  onClick={() => setSelectedProductForVariations(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <p className="text-sm font-semibold text-pet-brown mb-4">{currentSelectedProduct.name}</p>
+              
+              <div className="space-y-3">
+                {currentSelectedProduct.variations?.map((variation: any) => {
+                  const stockLeft = variation.stock_on_hand !== undefined ? variation.stock_on_hand : 0;
+                  const isOutOfStock = stockLeft <= 0;
+                  
+                  return (
+                    <button
+                      key={variation.id}
+                      onClick={() => handleSelectVariation(currentSelectedProduct, variation)}
+                      disabled={isOutOfStock}
+                      className={`w-full p-4 border-2 rounded-lg text-left font-semibold text-pet-brown transition-colors flex justify-between items-center ${
+                        isOutOfStock
+                          ? 'border-red-300 bg-red-50 opacity-60 cursor-not-allowed'
+                          : 'border-pet-orange hover:bg-pet-cream'
+                      }`}
+                    >
+                      <div>
+                        <span>{variation.name}</span>
+                        <span className={`text-xs ml-2 px-1.5 py-0.5 rounded font-bold ${
+                          isOutOfStock 
+                            ? 'bg-red-100 text-red-800' 
+                            : stockLeft <= 5 
+                              ? 'bg-yellow-100 text-yellow-800' 
+                              : 'bg-green-100 text-green-800'
+                        }`}>
+                          {isOutOfStock ? 'Out of Stock' : `${stockLeft} left`}
+                        </span>
+                      </div>
+                      <span className="text-pet-orange-dark text-lg">₱{variation.price.toFixed(2)}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
