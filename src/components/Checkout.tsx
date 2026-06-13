@@ -108,6 +108,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
   const handlePlaceOrder = async () => {
     if (isProcessing) return;
 
+    // Open a blank window immediately in the synchronous click event to prevent popup blockers
+    const messengerWindow = window.open('about:blank', '_blank');
+
     try {
       setIsProcessing(true);
       console.log('🛒 Starting order creation for website checkout...');
@@ -211,7 +214,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
 📞 Contact: ${contactNumber}
 ${serviceDetails}
 
-
 📋 ORDER DETAILS:
 ${cartItems.map(item => {
         let itemDetails = `• ${item.name}`;
@@ -249,26 +251,23 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
       const encodedMessage = encodeURIComponent(orderDetails);
       const messengerUrl = `https://m.me/100310379306836?text=${encodedMessage}`;
 
-      // Open Messenger immediately (before alert to avoid popup blocking)
-      const messengerWindow = window.open(messengerUrl, '_blank');
+      // Redirect the already-opened blank window to the messenger URL
+      if (messengerWindow) {
+        messengerWindow.location.href = messengerUrl;
+      } else {
+        // Fallback direct redirection if window creation failed completely
+        window.open(messengerUrl, '_blank');
+      }
 
-      // Show success message after opening Messenger
+      // Show success message
       setTimeout(() => {
         alert(`✅ Order ${order.order_number} created successfully!\n\nStock levels have been updated.`);
       }, 100);
 
-      // If popup was blocked, show fallback with link
-      if (!messengerWindow || messengerWindow.closed || typeof messengerWindow.closed === 'undefined') {
-        setTimeout(() => {
-          alert(`✅ Order ${order.order_number} created successfully!\n\n⚠️ Messenger popup was blocked. Please click this link:\n\n${messengerUrl.substring(0, 50)}...`);
-          // Copy to clipboard if possible
-          if (navigator.clipboard) {
-            navigator.clipboard.writeText(messengerUrl);
-          }
-        }, 200);
-      }
-
     } catch (error: any) {
+      if (messengerWindow) {
+        messengerWindow.close();
+      }
       console.error('❌ Error creating order:', error);
       alert(`Failed to create order: ${error.message}\n\nPlease try again or contact support.`);
     } finally {
