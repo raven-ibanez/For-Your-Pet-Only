@@ -5,6 +5,7 @@ import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useDeliverySettings } from '../hooks/useDeliverySettings';
 import { posAPI } from '../lib/pos';
 import { useMenu } from '../hooks/useMenu';
+import { supabase } from '../lib/supabase';
 
 interface CheckoutProps {
   cartItems: CartItem[];
@@ -188,6 +189,27 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
       await posAPI.completeOrder(order.id);
 
       console.log('✅ Order completed - inventory updated!');
+
+      // Deduct variation stocks manually
+      for (const item of cartItems) {
+        if (item.selectedVariation && item.selectedVariation.id) {
+          const varId = item.selectedVariation.id;
+          const currentStock = item.selectedVariation.stock_on_hand || 0;
+          const newStock = Math.max(0, currentStock - item.quantity);
+          console.log(`🔄 Deducting variation stock for ${item.name} (${item.selectedVariation.name}): ${currentStock} -> ${newStock}`);
+          
+          const { error: varUpdateError } = await supabase
+            .from('variations')
+            .update({ stock_on_hand: newStock })
+            .eq('id', varId);
+
+          if (varUpdateError) {
+            console.error(`❌ Failed to deduct stock for variation ${item.selectedVariation.name}:`, varUpdateError);
+          } else {
+            console.log(`✅ Deducted stock for variation ${item.selectedVariation.name} to ${newStock}`);
+          }
+        }
+      }
 
       // Build service-specific details for Messenger message
       let serviceDetails = '';
