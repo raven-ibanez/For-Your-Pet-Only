@@ -80,12 +80,12 @@ const InventoryManagement: React.FC = () => {
       const totalChanges = syncResult.created + costResult.updated;
 
       if (totalChanges > 0) {
-        alert(`✅ Success!\n\n` +
+        alert(`Success!\n\n` +
           `• Created ${syncResult.created} new inventory records\n` +
           `• Fixed ${costResult.updated} unit costs\n\n` +
           `All products now properly tracked with correct prices!`);
       } else {
-        alert('✅ All products are already synced with correct prices!');
+        alert('All products are already synced with correct prices!');
       }
 
       // Reload inventory
@@ -188,7 +188,7 @@ const InventoryManagement: React.FC = () => {
   const handleFixNegativeStock = async () => {
     const negativeCount = stats.negative;
     if (negativeCount === 0) {
-      alert('✅ No negative stock found!');
+      alert('No negative stock found!');
       return;
     }
 
@@ -206,7 +206,7 @@ const InventoryManagement: React.FC = () => {
       }
 
       const fixedCount = data?.[0]?.fixed_count || 0;
-      alert(`✅ Fixed ${fixedCount} item(s) with negative stock!\n\nAll negative stock values have been set to 0.`);
+      alert(`Fixed ${fixedCount} item(s) with negative stock!\n\nAll negative stock values have been set to 0.`);
 
       // Reload inventory
       await loadInventory();
@@ -270,7 +270,7 @@ const InventoryManagement: React.FC = () => {
         }
 
         console.log('✅ Variation adjusted successfully:', data);
-        alert(`✅ Variation Updated!\n${selectedItem.menu_items?.name} (${selectedItem.variationName})\nStock: ${stockAmount}\nCost: ₱${costVal.toFixed(2)}\nMargin: ${marginVal}%\nReason: ${adjustReason}`);
+        alert(`Variation Updated!\n${selectedItem.menu_items?.name} (${selectedItem.variationName})\nStock: ${stockAmount}\nCost: ₱${costVal.toFixed(2)}\nMargin: ${marginVal}%\nReason: ${adjustReason}`);
       } else {
         console.log('🔄 Adjusting stock:', {
           item: selectedItem.menu_items?.name,
@@ -294,12 +294,13 @@ const InventoryManagement: React.FC = () => {
 
         if (error) {
           console.error('❌ Stock adjustment error:', error);
+          console.error('Stock adjustment error:', error);
           alert(`Failed to adjust stock: ${error.message}`);
           return;
         }
 
-        console.log('✅ Stock adjusted successfully:', data);
-        alert(`✅ Stock Updated!\n${selectedItem.menu_items?.name}\nOld Stock: ${selectedItem.current_stock}\nNew Stock: ${stockAmount}\nReason: ${adjustReason}`);
+        console.log('Stock adjusted successfully:', data);
+        alert(`Stock Adjusted!\n${selectedItem.menu_items?.name}\nOld Stock: ${selectedItem.current_stock}\nNew Stock: ${stockAmount}\nReason: ${adjustReason}`);
       }
 
       setShowAdjustModal(false);
@@ -398,7 +399,7 @@ const InventoryManagement: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-pet-orange-dark">📦 Inventory Management</h1>
+          <h1 className="text-3xl font-bold text-pet-orange-dark">Inventory Management</h1>
           <p className="text-pet-gray-medium mt-1">Track and manage product stock levels</p>
         </div>
         <div className="flex items-center space-x-3">
@@ -434,7 +435,7 @@ const InventoryManagement: React.FC = () => {
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
           >
-            📦 Current Inventory
+            Current Inventory
           </button>
           <button
             onClick={() => setActiveTab('movements')}
@@ -443,7 +444,7 @@ const InventoryManagement: React.FC = () => {
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
           >
-            📊 Stock Movements (In/Out)
+            Stock Movements (In/Out)
           </button>
         </div>
       </div>
@@ -459,7 +460,7 @@ const InventoryManagement: React.FC = () => {
                 <AlertTriangle className="h-5 w-5 text-red-600 mr-3 mt-0.5" />
                 <div className="flex-1">
                   <h3 className="text-red-800 font-bold mb-2">
-                    ⚠️ Negative Stock Detected!
+                    Negative Stock Detected!
                   </h3>
                   <p className="text-red-700 text-sm mb-3">
                     {stats.negative} product{stats.negative > 1 ? 's have' : ' has'} negative stock values.
@@ -484,7 +485,7 @@ const InventoryManagement: React.FC = () => {
                 <AlertTriangle className="h-5 w-5 text-yellow-600 mr-3 mt-0.5" />
                 <div className="flex-1">
                   <h3 className="text-yellow-800 font-bold mb-2">
-                    ⚠️ Unit Cost Issue Detected
+                    Unit Cost Issue Detected
                   </h3>
                   <p className="text-yellow-700 text-sm mb-3">
                     {stats.brokenCosts} product{stats.brokenCosts > 1 ? 's have' : ' has'} unit cost set to ₱0.00.
@@ -908,11 +909,11 @@ const InventoryManagement: React.FC = () => {
                       className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange"
                     >
                       <option value="">Select reason...</option>
-                      <option value="Physical count">📦 Physical Count</option>
-                      <option value="Received shipment">🚚 Received Shipment</option>
-                      <option value="Damaged items">⚠️ Damaged Items</option>
-                      <option value="Expired items">📅 Expired Items</option>
-                      <option value="Correction">✏️ Correction</option>
+                      <option value="Physical count">Physical Count</option>
+                      <option value="Received shipment">Received Shipment</option>
+                      <option value="Damaged items">Damaged Items</option>
+                      <option value="Expired items">Expired Items</option>
+                      <option value="Correction">Correction</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>

@@ -121,7 +121,7 @@ const Reports: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-pet-orange-dark">📊 Sales Reports & Analytics</h1>
+          <h1 className="text-3xl font-bold text-pet-orange-dark">Sales Reports & Analytics</h1>
           <p className="text-pet-gray-medium mt-1">Comprehensive business insights and performance metrics</p>
         </div>
       </div>
@@ -255,7 +255,7 @@ const Reports: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Products */}
         <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-xl font-bold text-pet-brown mb-4">🏆 Top Selling Products</h2>
+          <h2 className="text-xl font-bold text-pet-brown mb-4">Top Selling Products</h2>
           <div className="space-y-3">
             {topProducts.length === 0 ? (
               <p className="text-center text-gray-500 py-4">No sales data yet</p>
@@ -263,8 +263,8 @@ const Reports: React.FC = () => {
               topProducts.slice(0, 10).map((product: any, index: number) => (
                 <div key={index} className="flex items-center justify-between p-3 bg-pet-cream rounded-lg">
                   <div className="flex items-center space-x-3">
-                    <span className="text-2xl">
-                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}
+                    <span className="inline-flex items-center justify-center w-6 h-6 bg-pet-orange text-white text-xs font-bold rounded-full mr-1">
+                      {index + 1}
                     </span>
                     <div>
                       <p className="font-semibold text-pet-brown">{product.product_name}</p>
@@ -287,7 +287,7 @@ const Reports: React.FC = () => {
 
         {/* Payment Method Breakdown */}
         <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-xl font-bold text-pet-brown mb-4">💳 Payment Methods</h2>
+          <h2 className="text-xl font-bold text-pet-brown mb-4">Payment Methods</h2>
           <div className="space-y-3">
             {paymentBreakdown.length === 0 ? (
               <p className="text-center text-gray-500 py-4">No payment data yet</p>

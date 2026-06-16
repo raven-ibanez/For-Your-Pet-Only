@@ -307,7 +307,7 @@ export const generateReceipt = (data: ReceiptData) => {
         </div>
         ${data.isPayLater ? `
           <div class="payment-row" style="background: #fff3cd; padding: 8px; border-radius: 4px; margin-top: 8px;">
-            <span style="font-weight: bold; color: #856404;">⚠️ Payment Pending - Pay Later</span>
+            <span style="font-weight: bold; color: #856404;">Payment Pending - Pay Later</span>
           </div>
         ` : ''}
         ${data.amountPaid !== undefined ? `
@@ -333,7 +333,7 @@ export const generateReceipt = (data: ReceiptData) => {
   </div>
 
   <div class="no-print">
-    <button class="print-button" onclick="window.print()">🖨️ Print Receipt</button>
+    <button class="print-button" onclick="window.print()">Print Receipt</button>
     <button class="print-button" onclick="window.close()">✕ Close</button>
   </div>
 </body>

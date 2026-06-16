@@ -40,7 +40,7 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
                 )}
               </h1>
               <p className="text-xs md:text-sm font-sans italic text-pet-orange -mt-1">
-                Furbaby Essentials 🐾
+                Furbaby Essentials
               </p>
             </div>
           </button>

@@ -29,7 +29,7 @@ const SubNav: React.FC<SubNavProps> = ({ selectedCategory, onCategoryClick }) =>
                     : 'bg-white text-pet-brown border-pet-orange hover:bg-pet-beige'
                 }`}
               >
-                🏠 All Products
+                All Products
               </button>
               {categories.map((c) => (
                 <button
@@ -41,7 +41,7 @@ const SubNav: React.FC<SubNavProps> = ({ selectedCategory, onCategoryClick }) =>
                       : 'bg-white text-pet-brown border-pet-orange hover:bg-pet-beige'
                   }`}
                 >
-                  <span>{c.icon}</span>
+                  {c.icon && <span>{c.icon}</span>}
                   <span>{c.name}</span>
                 </button>
               ))}

@@ -204,10 +204,10 @@ export const menuData: MenuItem[] = [
 ];
 
 export const categories = [
-  { id: 'dim-sum', name: 'Dim Sum', icon: '🥟' },
-  { id: 'noodles', name: 'Noodles', icon: '🍜' },
-  { id: 'rice-dishes', name: 'Rice Dishes', icon: '🍚' },
-  { id: 'beverages', name: 'Beverages', icon: '🍵' }
+  { id: 'dim-sum', name: 'Dim Sum', icon: '' },
+  { id: 'noodles', name: 'Noodles', icon: '' },
+  { id: 'rice-dishes', name: 'Rice Dishes', icon: '' },
+  { id: 'beverages', name: 'Beverages', icon: '' }
 ];
 
 export const addOnCategories = [

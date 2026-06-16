@@ -267,7 +267,7 @@ const POSDashboard: React.FC = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-display font-bold text-pet-orange-dark">
-            🛒 Quick Sale
+            Quick Sale
           </h1>
           <button
             onClick={() => setActiveView('dashboard')}
@@ -493,7 +493,7 @@ const POSDashboard: React.FC = () => {
             <div className="flex-1">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-yellow-800 mb-2">
-                  ⏰ Pending Payments
+                  Pending Payments
                 </h3>
                 <button
                   onClick={() => setActiveView('pending-payments')}
@@ -517,7 +517,7 @@ const POSDashboard: React.FC = () => {
             <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 mr-3" />
             <div className="flex-1">
               <h3 className="text-lg font-bold text-red-800 mb-2">
-                ⚠️ Low Stock Alert ({lowStockItems.length} items)
+                Low Stock Alert ({lowStockItems.length} items)
               </h3>
               <div className="space-y-1">
                 {lowStockItems.slice(0, 5).map((item: any, index: number) => (
@@ -555,8 +555,8 @@ const POSDashboard: React.FC = () => {
                 <div key={index} className="flex items-center justify-between pb-4 border-b border-pet-beige last:border-0">
                   <div className="flex-1">
                     <div className="flex items-center">
-                      <span className="text-2xl mr-3">
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '📦'}
+                      <span className="inline-flex items-center justify-center w-6 h-6 bg-pet-orange text-white text-xs font-bold rounded-full mr-3">
+                        {index + 1}
                       </span>
                       <div>
                         <p className="font-semibold text-pet-brown">
@@ -703,7 +703,7 @@ const POSDashboard: React.FC = () => {
       {/* Footer Info */}
       <div className="bg-white rounded-lg shadow p-4 text-center text-sm text-pet-gray-medium">
         Last updated: {new Date().toLocaleString()} • 
-        <span className="text-pet-orange font-semibold ml-1">POS System Active ✅</span>
+        <span className="text-pet-orange font-semibold ml-1">POS System Active</span>
       </div>
     </div>
   );

@@ -22,7 +22,7 @@ const MobileNav: React.FC<MobileNavProps> = ({ activeCategory, onCategoryClick }
                 : 'bg-pet-beige text-pet-brown border-pet-orange hover:bg-pet-cream'
             }`}
           >
-            <span className="text-lg">{category.icon}</span>
+            {category.icon && <span className="text-lg">{category.icon}</span>}
             <span className="text-sm whitespace-nowrap">{category.name}</span>
           </button>
         ))}

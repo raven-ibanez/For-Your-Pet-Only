@@ -279,6 +279,35 @@ export type Database = {
           updated_at?: string;
         };
       };
+      vouchers: {
+        Row: {
+          id: string;
+          code: string;
+          type: 'free_delivery' | 'percentage' | 'fixed';
+          value: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          type: 'free_delivery' | 'percentage' | 'fixed';
+          value?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          code?: string;
+          type?: 'free_delivery' | 'percentage' | 'fixed';
+          value?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 };

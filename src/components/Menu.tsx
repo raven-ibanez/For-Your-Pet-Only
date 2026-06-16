@@ -121,7 +121,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
   return (
     <>
       {/* Search Bar - Sticky outside main container */}
-      <div className="sticky top-[176px] md:top-[176px] z-30 bg-white/95 backdrop-blur-md border-b-2 border-pet-orange shadow-md">
+      <div className="sticky top-[152px] md:top-[152px] z-30 bg-white/95 backdrop-blur-md border-b-2 border-pet-orange shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="max-w-2xl mx-auto">
             <div className="relative">
@@ -148,7 +148,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-8">
-          <h2 className="text-4xl font-display font-bold text-pet-orange-dark mb-4">Our Products 🐾</h2>
+          <h2 className="text-4xl font-display font-bold text-pet-orange-dark mb-4">Our Products</h2>
           <p className="text-pet-gray-dark text-lg max-w-2xl mx-auto mb-6">
             Browse our carefully curated selection of premium pet supplies, toys, treats, and essentials
             to keep your furbabies happy and healthy!
@@ -205,7 +205,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
             return (
               <section key={category.id} id={category.id} className="mb-16">
                 <div className="flex items-center mb-8 pb-4 border-b-2 border-pet-orange">
-                  <span className="text-4xl mr-3">{category.icon}</span>
+                  {category.icon && <span className="text-4xl mr-3">{category.icon}</span>}
                   <h3 className="text-3xl font-display font-bold text-pet-orange-dark">{category.name}</h3>
                 </div>
 

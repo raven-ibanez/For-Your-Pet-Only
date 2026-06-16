@@ -110,7 +110,7 @@ const PendingPayments: React.FC = () => {
       setSelectedOrder(null);
       setAmountPaid('');
       
-      alert(`✅ Payment recorded for Order ${selectedOrder.order_number}`);
+      alert(`Payment recorded for Order ${selectedOrder.order_number}`);
     } catch (error: any) {
       console.error('Error processing payment:', error);
       alert(`Failed to process payment: ${error.message}`);
@@ -318,11 +318,11 @@ const PendingPayments: React.FC = () => {
                   }}
                   className="w-full px-4 py-3 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange"
                 >
-                  <option value="cash">💵 Cash</option>
-                  <option value="card">💳 Card</option>
-                  <option value="gcash">📱 GCash</option>
-                  <option value="maya">📱 Maya</option>
-                  <option value="qrph">📱 QRPH (+1%)</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="gcash">GCash</option>
+                  <option value="maya">Maya</option>
+                  <option value="qrph">QRPH (+1%)</option>
                 </select>
               </div>
 
@@ -352,7 +352,7 @@ const PendingPayments: React.FC = () => {
                   )}
                   {amountPaid && parseFloat(amountPaid) < selectedOrder.total_amount && (
                     <p className="text-xs text-red-600 mt-1">
-                      ⚠️ Amount is less than total
+                      Amount is less than total
                     </p>
                   )}
                 </div>

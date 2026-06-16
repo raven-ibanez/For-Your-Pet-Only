@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3, Megaphone, Search, Download, Truck } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, Coffee, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, BarChart3, Megaphone, Search, Download, Truck, Ticket } from 'lucide-react';
 import { MenuItem, Variation, AddOn, Announcement } from '../types';
 import { addOnCategories } from '../data/menuData';
 import { useMenu } from '../hooks/useMenu';
@@ -11,6 +11,7 @@ import PaymentMethodManager from './PaymentMethodManager';
 import SiteSettingsManager from './SiteSettingsManager';
 import POSDashboard from './POSDashboard';
 import DeliverySettingsManager from './DeliverySettingsManager';
+import VoucherManager from './VoucherManager';
 
 const formatForInput = (dateString?: string | null) => {
   if (!dateString) return '';
@@ -28,7 +29,7 @@ const AdminDashboard: React.FC = () => {
   const { menuItems, loading, addMenuItem, updateMenuItem, deleteMenuItem } = useMenu();
   const { categories } = useCategories();
   const { announcements, loading: announcementsLoading, addAnnouncement, updateAnnouncement, deleteAnnouncement } = useAnnouncements();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings' | 'pos' | 'announcements' | 'announcements-add' | 'announcements-edit' | 'delivery-settings'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings' | 'pos' | 'announcements' | 'announcements-add' | 'announcements-edit' | 'delivery-settings' | 'vouchers'>('dashboard');
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -1093,7 +1094,7 @@ const AdminDashboard: React.FC = () => {
                                   ? 'bg-red-100 text-red-800'
                                   : 'bg-yellow-100 text-yellow-800'
                                 }`}>
-                                ⚠️ {expiryWarning.message}
+                                {expiryWarning.message}
                               </span>
                             );
                           })()}
@@ -1214,7 +1215,7 @@ const AdminDashboard: React.FC = () => {
                               ? 'bg-red-100 text-red-800'
                               : 'bg-yellow-100 text-yellow-800'
                             }`}>
-                            ⚠️ {expiryWarning.message}
+                            {expiryWarning.message}
                           </span>
                         );
                       })()}
@@ -1253,6 +1254,11 @@ const AdminDashboard: React.FC = () => {
   // Delivery Settings View
   if (currentView === 'delivery-settings') {
     return <DeliverySettingsManager onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Voucher Settings View
+  if (currentView === 'vouchers') {
+    return <VoucherManager onBack={() => setCurrentView('dashboard')} />;
   }
 
   // POS View
@@ -1710,6 +1716,13 @@ const AdminDashboard: React.FC = () => {
                 <span className="font-medium text-gray-900">Delivery Settings</span>
               </button>
               <button
+                onClick={() => setCurrentView('vouchers')}
+                className="w-full flex items-center space-x-3 p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
+              >
+                <Ticket className="h-5 w-5 text-gray-400" />
+                <span className="font-medium text-gray-900">Voucher Settings</span>
+              </button>
+              <button
                 onClick={() => setCurrentView('pos')}
                 className="w-full flex items-center space-x-3 p-3 text-left hover:bg-pet-orange-dark/10 rounded-lg transition-colors duration-200 border-2 border-pet-orange"
               >
@@ -1725,7 +1738,7 @@ const AdminDashboard: React.FC = () => {
               {categoryCounts.map((category) => (
                 <div key={category.id} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <span className="text-lg">{category.icon}</span>
+                    {category.icon && <span className="text-lg">{category.icon}</span>}
                     <span className="font-medium text-gray-900">{category.name}</span>
                   </div>
                   <span className="text-sm text-gray-500">{category.count} items</span>
