@@ -63,6 +63,14 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
     }
   }, [paymentMethods, paymentMethod]);
 
+  // Reset payment method if Cash is selected but service type is Lalamove
+  React.useEffect(() => {
+    if (serviceType === 'lalamove' && paymentMethod === 'cash') {
+      const defaultMethod = paymentMethods.find(m => m.id !== 'cash')?.id || 'gcash';
+      setPaymentMethod(defaultMethod as PaymentMethod);
+    }
+  }, [serviceType, paymentMethod, paymentMethods]);
+
   // Active subdivisions only
   const activeSubdivisions = subdivisions.filter(s => s.active);
 
@@ -197,7 +205,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
           const currentStock = item.selectedVariation.stock_on_hand || 0;
           const newStock = Math.max(0, currentStock - item.quantity);
           console.log(`🔄 Deducting variation stock for ${item.name} (${item.selectedVariation.name}): ${currentStock} -> ${newStock}`);
-          
+
           const { error: varUpdateError } = await supabase
             .from('variations')
             .update({ stock_on_hand: newStock })
@@ -581,7 +589,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                       <li>• Buyer to arrange booking and pay the delivery fee.</li>
                       <li>• Online payment should be made before booking.</li>
                       <li>• Can be picked up anytime during open hours.</li>
-                      <li> <b>Pick-up Address:</b> Natalia Homes, Phase 1B Block 18 Lot 66, Pine Street, Pasong Kawayan 2, General Trias, Cavite</li>
+                      <li> <b>Pick-up Address:</b> Natania Homes, Phase 1B Block 18 Lot 66, Pine Street, Pasong Kawayan 2, General Trias, Cavite</li>
 
                     </ul>
                   </div>
@@ -666,18 +674,27 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
               {/* Cash Payment Option */}
               <button
                 type="button"
+                disabled={serviceType === 'lalamove'}
                 onClick={() => {
                   setPaymentMethod('cash');
                   setCashAmountPaid('');
                   setCashChangeNeeded('');
                 }}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 ${paymentMethod === 'cash'
-                  ? 'border-pet-orange bg-pet-orange text-white'
-                  : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
-                  }`}
+                className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 w-full ${
+                  serviceType === 'lalamove'
+                    ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                    : paymentMethod === 'cash'
+                    ? 'border-pet-orange bg-pet-orange text-white'
+                    : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
+                }`}
               >
                 <span className="text-2xl">💵</span>
-                <span className="font-medium">Cash</span>
+                <div className="flex flex-col items-start">
+                  <span className="font-medium">Cash</span>
+                  {serviceType === 'lalamove' && (
+                    <span className="text-xs text-red-500 font-normal">Not available for Lalamove delivery</span>
+                  )}
+                </div>
               </button>
 
               {/* Other Payment Methods */}
@@ -954,7 +971,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
         <p className="text-pet-gray-medium mb-6">
           Order number: <strong className="text-pet-orange-dark text-lg">#{createdOrderNumber}</strong>
         </p>
-        
+
         <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 mb-6 text-left w-full space-y-2">
           <p className="text-sm text-green-800 font-bold flex items-center">
             📋 Order Details Copied!

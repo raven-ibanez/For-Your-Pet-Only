@@ -53,20 +53,16 @@ export const useCart = () => {
           return groups;
         }, [] as (AddOn & { quantity: number })[]);
         
-        const existingItem = prev.find(cartItem => 
-          cartItem.id === item.id && 
-          cartItem.selectedVariation?.id === variation?.id &&
-          JSON.stringify(cartItem.selectedAddOns?.map(a => `${a.id}-${a.quantity || 1}`).sort()) === JSON.stringify(groupedAddOns?.map(a => `${a.id}-${a.quantity}`).sort())
-        );
+        const uniqueId = `${item.id}-${variation?.id || 'default'}-${addOns?.map(a => a.id).sort().join(',') || 'none'}`;
+        const existingItem = prev.find(cartItem => cartItem.id === uniqueId);
         
         if (existingItem) {
           return prev.map(cartItem =>
-            cartItem === existingItem
+            cartItem.id === uniqueId
               ? { ...cartItem, quantity: cartItem.quantity + quantity }
               : cartItem
           );
         } else {
-          const uniqueId = `${item.id}-${variation?.id || 'default'}-${addOns?.map(a => a.id).join(',') || 'none'}`;
           return [...prev, { 
             ...item,
             id: uniqueId,
@@ -93,20 +89,16 @@ export const useCart = () => {
       }, [] as (AddOn & { quantity: number })[]);
       
       setCartItems(prev => {
-        const existingItem = prev.find(cartItem => 
-          cartItem.id === item.id && 
-          cartItem.selectedVariation?.id === variation?.id &&
-          JSON.stringify(cartItem.selectedAddOns?.map(a => `${a.id}-${a.quantity || 1}`).sort()) === JSON.stringify(groupedAddOns?.map(a => `${a.id}-${a.quantity}`).sort())
-        );
+        const uniqueId = `${item.id}-${variation?.id || 'default'}-${addOns?.map(a => a.id).sort().join(',') || 'none'}`;
+        const existingItem = prev.find(cartItem => cartItem.id === uniqueId);
         
         if (existingItem) {
           return prev.map(cartItem =>
-            cartItem === existingItem
+            cartItem.id === uniqueId
               ? { ...cartItem, quantity: cartItem.quantity + quantity }
               : cartItem
           );
         } else {
-          const uniqueId = `${item.id}-${variation?.id || 'default'}-${addOns?.map(a => a.id).join(',') || 'none'}`;
           return [...prev, { 
             ...item,
             id: uniqueId,
