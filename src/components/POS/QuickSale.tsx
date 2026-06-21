@@ -6,6 +6,7 @@ import { useCategories } from '../../hooks/useCategories';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
 import { supabase } from '../../lib/supabase';
 import { downloadReceipt, ReceiptData } from '../../utils/receiptGenerator';
+import { useDeliverySettings } from '../../hooks/useDeliverySettings';
 
 interface CartItem {
   id: string;
@@ -19,6 +20,7 @@ const QuickSale: React.FC = () => {
   const { menuItems, loading: productsLoading, refetch: refetchMenu } = useMenu();
   const { siteSettings } = useSiteSettings();
   const { categories } = useCategories();
+  const { subdivisions, globalSettings } = useDeliverySettings();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
@@ -37,6 +39,13 @@ const QuickSale: React.FC = () => {
   const [multiPayments, setMultiPayments] = useState<Array<{ method: string; amount: string; id: string }>>([]);
   const [discount, setDiscount] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
+  const [selectedSubdivisionId, setSelectedSubdivisionId] = useState('');
+  
+  // Voucher state
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<any | null>(null);
+  const [voucherError, setVoucherError] = useState('');
+  const [isApplyingVoucher, setIsApplyingVoucher] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastOrderNumber, setLastOrderNumber] = useState('');
@@ -114,6 +123,62 @@ const QuickSale: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Active subdivisions
+  const activeSubdivisions = subdivisions.filter(s => s.active);
+
+  // Sync delivery fee with selected subdivision
+  useEffect(() => {
+    if (selectedSubdivisionId) {
+      const selected = activeSubdivisions.find(s => s.id === selectedSubdivisionId);
+      if (selected) {
+        const fee = globalSettings.free_delivery_promo ? 0 : selected.delivery_fee;
+        setDeliveryFee(fee.toString());
+      }
+    } else {
+      setDeliveryFee('');
+    }
+  }, [selectedSubdivisionId, globalSettings.free_delivery_promo, subdivisions]);
+
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    try {
+      setIsApplyingVoucher(true);
+      setVoucherError('');
+
+      const { data, error } = await supabase
+        .from('vouchers')
+        .select('*')
+        .eq('code', voucherCode.trim().toUpperCase())
+        .single();
+
+      if (error || !data) {
+        setVoucherError('Invalid voucher code');
+        setAppliedVoucher(null);
+        return;
+      }
+
+      if (!data.active) {
+        setVoucherError('This voucher code is inactive');
+        setAppliedVoucher(null);
+        return;
+      }
+
+      setAppliedVoucher(data);
+      setVoucherError('');
+    } catch (err) {
+      console.error(err);
+      setVoucherError('Error validating voucher code');
+    } finally {
+      setIsApplyingVoucher(false);
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherCode('');
+    setVoucherError('');
+  };
 
   // Handle customer selection
   const handleCustomerSelect = (customer: Customer) => {
@@ -256,6 +321,21 @@ const QuickSale: React.FC = () => {
     return parseFloat(deliveryFee) || 0;
   };
 
+  const calculateVoucherDiscount = () => {
+    if (!appliedVoucher) return 0;
+    const subtotal = calculateSubtotal();
+    if (appliedVoucher.type === 'free_delivery') {
+      return calculateDeliveryFee();
+    }
+    if (appliedVoucher.type === 'percentage') {
+      return subtotal * (appliedVoucher.value / 100);
+    }
+    if (appliedVoucher.type === 'fixed') {
+      return Math.min(appliedVoucher.value, subtotal);
+    }
+    return 0;
+  };
+
   const calculateQRPHFee = () => {
     if (useMultiPayment) {
       const qrphAmount = multiPayments
@@ -266,8 +346,9 @@ const QuickSale: React.FC = () => {
     if (paymentMethod === 'qrph') {
       const subtotal = calculateSubtotal();
       const discountAmount = calculateDiscount();
+      const voucherDiscountAmount = calculateVoucherDiscount();
       const deliveryFeeAmount = calculateDeliveryFee();
-      const baseTotal = Math.max(0, subtotal - discountAmount + deliveryFeeAmount);
+      const baseTotal = Math.max(0, subtotal - discountAmount - voucherDiscountAmount + deliveryFeeAmount);
       return baseTotal * 0.01;
     }
     return 0;
@@ -276,8 +357,9 @@ const QuickSale: React.FC = () => {
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
     const discountAmount = calculateDiscount();
+    const voucherDiscountAmount = calculateVoucherDiscount();
     const deliveryFeeAmount = calculateDeliveryFee();
-    const baseTotal = Math.max(0, subtotal - discountAmount + deliveryFeeAmount);
+    const baseTotal = Math.max(0, subtotal - discountAmount - voucherDiscountAmount + deliveryFeeAmount);
     return baseTotal + calculateQRPHFee();
   };
 
@@ -405,7 +487,7 @@ const QuickSale: React.FC = () => {
             quantity: item.quantity
           };
         }),
-        discount_amount: calculateDiscount()
+        discount_amount: calculateDiscount() + calculateVoucherDiscount()
       });
 
       console.log('Order created:', order.order_number);
@@ -441,35 +523,43 @@ const QuickSale: React.FC = () => {
         console.log('Pay Later: Skipping payment creation');
       }
 
-      // Update order with delivery fee and payment status
+      // Update order with delivery fee, voucher, notes and payment status
       const updateData: any = {
         total_amount: calculateTotal()
       };
       
+      let saleNotes = notes ? `${notes}` : '';
+      if (selectedSubdivisionId) {
+        const selected = activeSubdivisions.find(s => s.id === selectedSubdivisionId);
+        if (selected) {
+          saleNotes += saleNotes ? ` | Subdivision: ${selected.name}` : `Subdivision: ${selected.name}`;
+        }
+      }
+      if (appliedVoucher) {
+        saleNotes += saleNotes ? ` | Voucher: ${appliedVoucher.code}` : `Voucher: ${appliedVoucher.code}`;
+      }
       if (calculateDeliveryFee() > 0) {
-        updateData.notes = `Delivery Fee: ₱${calculateDeliveryFee().toFixed(2)}`;
+        const deliveryFeeText = `Delivery Fee: ₱${calculateDeliveryFee().toFixed(2)}`;
+        saleNotes += saleNotes ? ` | ${deliveryFeeText}` : deliveryFeeText;
       }
       
-      // For pay-later, keep payment_status as 'pending' but mark order as completed
       if (isPayLater) {
         updateData.payment_status = 'pending';
         updateData.order_status = 'completed'; // Order is completed, just payment is pending
-        if (updateData.notes) {
-          updateData.notes += ' | Payment: Pending (Pay Later)';
-        } else {
-          updateData.notes = 'Payment: Pending (Pay Later)';
-        }
+        saleNotes += saleNotes ? ' | Payment: Pending (Pay Later)' : 'Payment: Pending (Pay Later)';
       }
       
-      if (calculateDeliveryFee() > 0 || isPayLater) {
-        const { error: updateError } = await supabase
-          .from('orders')
-          .update(updateData)
-          .eq('id', order.id);
-        
-        if (updateError) {
-          console.error('Failed to update order:', updateError);
-        }
+      if (saleNotes) {
+        updateData.notes = saleNotes;
+      }
+      
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update(updateData)
+        .eq('id', order.id);
+      
+      if (updateError) {
+        console.error('Failed to update order:', updateError);
       }
 
       // Get stock levels BEFORE completing order (only for tracked items)
@@ -632,7 +722,8 @@ const QuickSale: React.FC = () => {
         multiPayments: useMultiPayment ? multiPayments.map(p => ({
           method: p.method,
           amount: p.method === 'qrph' ? (parseFloat(p.amount) || 0) * 1.01 : (parseFloat(p.amount) || 0)
-        })) : undefined
+        })) : undefined,
+        notes: saleNotes || undefined
       };
 
       // Store receipt data
@@ -655,6 +746,10 @@ const QuickSale: React.FC = () => {
       setMultiPayments([]);
       setDiscount('');
       setDeliveryFee('');
+      setSelectedSubdivisionId('');
+      setVoucherCode('');
+      setAppliedVoucher(null);
+      setVoucherError('');
       
       // Refresh local product stock states
       refetchMenu();
@@ -1059,6 +1154,71 @@ const QuickSale: React.FC = () => {
                 className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base"
               />
             </div>
+            
+            {/* Voucher Code */}
+            <div>
+              <label className="block text-xs font-semibold text-pet-brown mb-2 uppercase">Apply Voucher</label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={voucherCode}
+                  onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                  disabled={!!appliedVoucher || isApplyingVoucher}
+                  className="flex-1 px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base uppercase disabled:bg-gray-100 disabled:text-gray-500 font-semibold"
+                  placeholder="ENTER CODE"
+                />
+                {appliedVoucher ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveVoucher}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-semibold"
+                  >
+                    Remove
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleApplyVoucher}
+                    disabled={!voucherCode.trim() || isApplyingVoucher}
+                    className="px-4 py-2 bg-pet-orange text-white rounded-lg hover:bg-pet-orange-dark disabled:bg-gray-300 disabled:text-gray-500 transition-colors text-sm font-semibold"
+                  >
+                    {isApplyingVoucher ? '...' : 'Apply'}
+                  </button>
+                )}
+              </div>
+              {voucherError && (
+                <div className="text-xs text-red-500 mt-1 font-semibold">
+                  ⚠️ {voucherError}
+                </div>
+              )}
+              {appliedVoucher && (
+                <div className="text-xs text-green-600 mt-1 font-semibold">
+                  ✓ "{appliedVoucher.code}" applied! (
+                  {appliedVoucher.type === 'free_delivery' && 'Free Shipping'}
+                  {appliedVoucher.type === 'percentage' && `${appliedVoucher.value}% Off`}
+                  {appliedVoucher.type === 'fixed' && `₱${appliedVoucher.value} Off`}
+                  )
+                </div>
+              )}
+            </div>
+
+            {/* Subdivision Dropdown */}
+            <div>
+              <label className="block text-xs font-semibold text-pet-brown mb-2 uppercase">Subdivision (Delivery)</label>
+              <select
+                value={selectedSubdivisionId}
+                onChange={(e) => setSelectedSubdivisionId(e.target.value)}
+                className="w-full px-4 py-2 border-2 border-pet-orange rounded-lg focus:outline-none focus:ring-2 focus:ring-pet-orange text-sm lg:text-base bg-white"
+              >
+                <option value="">-- Select Subdivision --</option>
+                {activeSubdivisions.map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.name} ({globalSettings.free_delivery_promo ? 'FREE' : `₱${sub.delivery_fee.toFixed(2)}`})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-pet-brown mb-2 uppercase">Delivery Fee</label>
               <input
@@ -1268,6 +1428,12 @@ const QuickSale: React.FC = () => {
                         <span className="font-semibold text-red-600">-₱{calculateDiscount().toFixed(2)}</span>
                       </div>
                     )}
+                    {calculateVoucherDiscount() > 0 && (
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-pet-gray-medium">Voucher Discount ({appliedVoucher?.code}):</span>
+                        <span className="font-semibold text-green-600">-₱{calculateVoucherDiscount().toFixed(2)}</span>
+                      </div>
+                    )}
                     {calculateDeliveryFee() > 0 && (
                       <div className="flex items-center justify-between text-xs mb-1">
                         <span className="text-pet-gray-medium">Delivery Fee:</span>
@@ -1315,6 +1481,12 @@ const QuickSale: React.FC = () => {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Discount</span>
                 <span className="font-semibold text-red-600">-₱{calculateDiscount().toFixed(2)}</span>
+              </div>
+            )}
+            {calculateVoucherDiscount() > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Voucher Discount ({appliedVoucher?.code})</span>
+                <span className="font-semibold text-green-600">-₱{calculateVoucherDiscount().toFixed(2)}</span>
               </div>
             )}
             {calculateDeliveryFee() > 0 && (

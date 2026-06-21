@@ -13,6 +13,9 @@ const Reports: React.FC = () => {
   const [paymentBreakdown, setPaymentBreakdown] = useState<any[]>([]);
   const [staffPerformance, setStaffPerformance] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPaymentMethodForModal, setSelectedPaymentMethodForModal] = useState<string | null>(null);
+  const [modalPayments, setModalPayments] = useState<any[]>([]);
+  const [modalLoading, setModalLoading] = useState(false);
 
   useEffect(() => {
     loadReportData();
@@ -78,6 +81,44 @@ const Reports: React.FC = () => {
       console.error('Error loading reports:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePaymentMethodClick = async (method: string) => {
+    setSelectedPaymentMethodForModal(method);
+    setModalLoading(true);
+    try {
+      const startDateTime = `${startDate}T00:00:00.000Z`;
+      const endDateTime = `${endDate}T23:59:59.999Z`;
+
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          payment_number,
+          payment_method,
+          amount,
+          reference_number,
+          payment_date,
+          orders (
+            id,
+            order_number,
+            customer_name,
+            total_amount
+          )
+        `)
+        .eq('payment_method', method)
+        .gte('payment_date', startDateTime)
+        .lte('payment_date', endDateTime)
+        .order('payment_date', { ascending: false });
+
+      if (error) throw error;
+      setModalPayments(data || []);
+    } catch (err) {
+      console.error('Error loading payments for method:', err);
+      alert('Error loading transactions');
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -293,7 +334,12 @@ const Reports: React.FC = () => {
               <p className="text-center text-gray-500 py-4">No payment data yet</p>
             ) : (
               paymentBreakdown.map((payment: any, index: number) => (
-                <div key={index} className="p-4 bg-pet-cream rounded-lg">
+                <div 
+                  key={index} 
+                  onClick={() => handlePaymentMethodClick(payment.payment_method)}
+                  className="p-4 bg-pet-cream rounded-lg hover:bg-pet-cream/80 cursor-pointer border border-transparent hover:border-pet-orange transition-all duration-200 group"
+                  title="Click to view transactions"
+                >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
                       <CreditCard className="h-5 w-5 text-pet-orange" />
@@ -371,6 +417,107 @@ const Reports: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Payment Method Transactions Modal */}
+      {selectedPaymentMethodForModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col border-2 border-pet-orange animate-slide-up">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-pet-beige flex items-center justify-between">
+              <div>
+                <h3 className="text-xl lg:text-2xl font-bold text-pet-orange-dark capitalize">
+                  {selectedPaymentMethodForModal} Transactions
+                </h3>
+                <p className="text-sm text-pet-gray-medium mt-1">
+                  Showing transactions from {formatDate(startDate)} to {formatDate(endDate)}
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setSelectedPaymentMethodForModal(null);
+                  setModalPayments([]);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors text-2xl font-semibold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {modalLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-pet-orange mb-3"></div>
+                  <p className="text-sm text-pet-gray-medium">Loading transactions...</p>
+                </div>
+              ) : modalPayments.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <p className="font-semibold text-lg">No transactions found</p>
+                  <p className="text-sm mt-1">There are no recorded payments using this method for the selected period.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[600px]">
+                    <thead>
+                      <tr className="border-b-2 border-pet-orange text-left">
+                        <th className="p-3 font-bold text-pet-brown text-sm">Date & Time</th>
+                        <th className="p-3 font-bold text-pet-brown text-sm">Payment Number</th>
+                        <th className="p-3 font-bold text-pet-brown text-sm">Order Number</th>
+                        <th className="p-3 font-bold text-pet-brown text-sm">Customer</th>
+                        <th className="p-3 font-bold text-pet-brown text-sm">Ref #</th>
+                        <th className="p-3 font-bold text-pet-brown text-sm text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modalPayments.map((payment: any, index: number) => {
+                        const payDate = new Date(payment.payment_date);
+                        const formattedDateTime = `${payDate.toLocaleDateString()} ${payDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                        return (
+                          <tr key={payment.id || index} className="border-b border-pet-beige hover:bg-pet-cream/50 transition-colors">
+                            <td className="p-3 text-sm text-gray-700">{formattedDateTime}</td>
+                            <td className="p-3 text-sm font-semibold text-pet-brown">{payment.payment_number}</td>
+                            <td className="p-3 text-sm font-semibold text-blue-600">
+                              {payment.orders?.order_number || 'N/A'}
+                            </td>
+                            <td className="p-3 text-sm text-gray-700">
+                              {payment.orders?.customer_name || 'Walk-in Customer'}
+                            </td>
+                            <td className="p-3 text-sm font-mono text-gray-600">
+                              {payment.reference_number || '-'}
+                            </td>
+                            <td className="p-3 text-sm font-bold text-pet-orange-dark text-right">
+                              ₱{parseFloat(payment.amount || 0).toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-pet-beige flex items-center justify-between bg-pet-cream/30">
+              <div className="text-xs lg:text-sm text-pet-brown">
+                Total Transactions: <strong className="text-sm lg:text-base text-pet-orange-dark">{modalPayments.length}</strong>
+              </div>
+              <div className="text-xs lg:text-sm text-pet-brown">
+                Total Amount: <strong className="text-sm lg:text-base text-pet-orange-dark">₱{modalPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0).toFixed(2)}</strong>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedPaymentMethodForModal(null);
+                  setModalPayments([]);
+                }}
+                className="px-5 py-2.5 bg-pet-orange text-white rounded-lg hover:bg-pet-orange-dark font-semibold transition-colors text-sm shadow-md"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

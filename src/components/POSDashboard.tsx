@@ -17,8 +17,10 @@ import CustomerManagement from './POS/CustomerManagement';
 import InventoryManagement from './POS/InventoryManagement';
 import Reports from './POS/Reports';
 import PendingPayments from './POS/PendingPayments';
+import ExpirationTracker from './POS/ExpirationTracker';
 import { downloadReceipt, ReceiptData } from '../utils/receiptGenerator';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { useMenu } from '../hooks/useMenu';
 
 const POSDashboard: React.FC = () => {
   const { siteSettings } = useSiteSettings();
@@ -30,7 +32,8 @@ const POSDashboard: React.FC = () => {
   const [inventoryValue, setInventoryValue] = useState<any>(null);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
-  const [activeView, setActiveView] = useState<'dashboard' | 'quicksale' | 'customers' | 'inventory' | 'reports' | 'pending-payments'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'quicksale' | 'customers' | 'inventory' | 'reports' | 'pending-payments' | 'expirations'>('dashboard');
+  const { menuItems } = useMenu();
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
@@ -349,7 +352,38 @@ const POSDashboard: React.FC = () => {
     );
   }
 
+  // Expirations View
+  if (activeView === 'expirations') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setActiveView('dashboard')}
+            className="px-4 py-2 bg-pet-orange text-white rounded-lg hover:bg-pet-orange-dark transition-colors"
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
+        <ExpirationTracker />
+      </div>
+    );
+  }
+
   // Main Dashboard View
+  const getNearExpiryCount = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return menuItems.filter(item => {
+      if (!item.expiryDate) return false;
+      const expiry = new Date(item.expiryDate);
+      expiry.setHours(0, 0, 0, 0);
+      const diffTime = expiry.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 90; // expired or expiring within 3 months (90 days)
+    }).length;
+  };
+  const nearExpiryCount = getNearExpiryCount();
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -441,7 +475,7 @@ const POSDashboard: React.FC = () => {
       {/* Quick Actions - MOVED TO TOP */}
       <div className="bg-gradient-to-r from-pet-orange to-pet-orange-dark rounded-xl shadow-lg p-6 text-white">
         <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <button 
             onClick={() => setActiveView('quicksale')}
             className="bg-white/20 hover:bg-white/30 transition-colors p-4 rounded-lg text-center group"
@@ -475,6 +509,14 @@ const POSDashboard: React.FC = () => {
             <p className="text-xs opacity-75 mt-1">Track & adjust stock</p>
           </button>
           <button 
+            onClick={() => setActiveView('expirations')}
+            className="bg-white/20 hover:bg-white/30 transition-colors p-4 rounded-lg text-center group border border-orange-300"
+          >
+            <Calendar className="h-6 w-6 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-semibold">Expirations</span>
+            <p className="text-xs opacity-75 mt-1">Track product expiry</p>
+          </button>
+          <button 
             onClick={() => setActiveView('reports')}
             className="bg-white/20 hover:bg-white/30 transition-colors p-4 rounded-lg text-center group"
           >
@@ -484,6 +526,31 @@ const POSDashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Near Expiration Alert */}
+      {nearExpiryCount > 0 && (
+        <div className="bg-orange-50 border-l-4 border-orange-500 p-6 rounded-lg shadow-sm">
+          <div className="flex items-start">
+            <Calendar className="h-5 w-5 text-orange-600 mt-0.5 mr-3" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-orange-800 mb-2">
+                  Near Expiration Alert
+                </h3>
+                <button
+                  onClick={() => setActiveView('expirations')}
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors text-sm font-semibold"
+                >
+                  Manage Expirations →
+                </button>
+              </div>
+              <p className="text-sm text-orange-700">
+                You have {nearExpiryCount} product(s) that are expired or expiring within 3 months (90 days)
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pending Payments Alert */}
       {recentOrders.filter((o: any) => o.payment_status === 'pending').length > 0 && (

@@ -85,7 +85,11 @@ export const useMenu = () => {
           // Stock information
           currentStock: inventory?.current_stock ?? undefined,
           isTracked: inventory?.is_tracked ?? false,
-          isOutOfStock: inventory?.is_out_of_stock ?? false
+          isOutOfStock: inventory?.is_out_of_stock ?? false,
+          costPrice: item.cost_price || undefined,
+          margin: item.margin || undefined,
+          expiryDate: item.expiry_date || undefined,
+          internalNotes: item.internal_notes || undefined
         };
       }) || [];
 
@@ -115,7 +119,11 @@ export const useMenu = () => {
           discount_price: item.discountPrice || null,
           discount_start_date: item.discountStartDate || null,
           discount_end_date: item.discountEndDate || null,
-          discount_active: item.discountActive || false
+          discount_active: item.discountActive || false,
+          cost_price: item.costPrice || null,
+          margin: item.margin || null,
+          expiry_date: item.expiryDate || null,
+          internal_notes: item.internalNotes || null
         })
         .select()
         .single();
@@ -200,7 +208,11 @@ export const useMenu = () => {
           discount_price: updates.discountPrice || null,
           discount_start_date: updates.discountStartDate || null,
           discount_end_date: updates.discountEndDate || null,
-          discount_active: updates.discountActive
+          discount_active: updates.discountActive,
+          cost_price: updates.costPrice !== undefined ? updates.costPrice : undefined,
+          margin: updates.margin !== undefined ? updates.margin : undefined,
+          expiry_date: updates.expiryDate !== undefined ? updates.expiryDate : undefined,
+          internal_notes: updates.internalNotes !== undefined ? updates.internalNotes : undefined
         })
         .eq('id', id);
 

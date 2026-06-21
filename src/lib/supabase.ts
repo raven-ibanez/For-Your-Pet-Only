@@ -57,6 +57,10 @@ export type Database = {
           discount_active: boolean;
           created_at: string;
           updated_at: string;
+          cost_price: number | null;
+          margin: number | null;
+          expiry_date: string | null;
+          internal_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -73,6 +77,10 @@ export type Database = {
           discount_active?: boolean;
           created_at?: string;
           updated_at?: string;
+          cost_price?: number | null;
+          margin?: number | null;
+          expiry_date?: string | null;
+          internal_notes?: string | null;
         };
         Update: {
           id?: string;
@@ -89,6 +97,10 @@ export type Database = {
           discount_active?: boolean;
           created_at?: string;
           updated_at?: string;
+          cost_price?: number | null;
+          margin?: number | null;
+          expiry_date?: string | null;
+          internal_notes?: string | null;
         };
       };
       variations: {

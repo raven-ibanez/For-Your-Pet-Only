@@ -110,19 +110,19 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
     try {
       setIsApplyingVoucher(true);
       setVoucherError('');
-      
+
       const { data, error } = await supabase
         .from('vouchers')
         .select('*')
         .eq('code', voucherCode.trim().toUpperCase())
         .single();
-        
+
       if (error || !data) {
         setVoucherError('Invalid voucher code');
         setAppliedVoucher(null);
         return;
       }
-      
+
       if (!data.active) {
         setVoucherError('This voucher code is inactive');
         setAppliedVoucher(null);
@@ -134,7 +134,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
         setAppliedVoucher(null);
         return;
       }
-      
+
       setAppliedVoucher(data);
       setVoucherError('');
     } catch (err) {
@@ -365,7 +365,7 @@ ${appliedVoucher ? `🏷️ Voucher Applied: ${appliedVoucher.code} (-₱${vouch
 
 💳 Payment: ${paymentMethod === 'cash' ? 'Cash' : (isQRPH ? 'QR Ph (+1% transaction fee)' : (selectedPaymentMethod?.name || paymentMethod))}
 ${paymentMethod === 'cash'
-          ? `💰 Amount Paid: ₱${cashAmountPaid || '0.00'}\n${cashChange !== '0.00' ? `🔄 Change: ₱${cashChange}` : ''}${cashChangeNeeded ? `\n📝 Change Note: ${cashChangeNeeded}` : ''}`
+          ? `💰 Customer to pay with: ₱${cashAmountPaid || '0.00'}\n${cashChange !== '0.00' ? `🔄 Change to be provided: ₱${cashChange}` : ''}${cashChangeNeeded ? `\n📝 Change Note: ${cashChangeNeeded}` : ''}`
           : `📸 Payment Screenshot: Please attach your payment receipt screenshot${isQRPH ? '\n💡 Note: 1% QR PH convenience fee included' : ''}`}
 
 ${notes ? `📝 Notes: ${notes}` : ''}
@@ -485,7 +485,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
               )}
               {appliedVoucher && (
                 <p className="text-xs text-green-600 mt-1.5 font-semibold">
-                  ✓ Voucher "{appliedVoucher.code}" applied! 
+                  ✓ Voucher "{appliedVoucher.code}" applied!
                   ({appliedVoucher.type === 'free_delivery' && 'Free Shipping'}
                   {appliedVoucher.type === 'percentage' && `${appliedVoucher.value}% Off`}
                   {appliedVoucher.type === 'fixed' && `₱${appliedVoucher.value} Off`})
@@ -845,13 +845,12 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                   setCashAmountPaid('');
                   setCashChangeNeeded('');
                 }}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 w-full ${
-                  serviceType === 'lalamove'
+                className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 w-full ${serviceType === 'lalamove'
                     ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
                     : paymentMethod === 'cash'
-                    ? 'border-pet-orange bg-pet-orange text-white'
-                    : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
-                }`}
+                      ? 'border-pet-orange bg-pet-orange text-white'
+                      : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
+                  }`}
               >
                 <Banknote className="h-6 w-6 text-current" />
                 <div className="flex flex-col items-start">
@@ -1183,7 +1182,7 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
     );
   }
 
-   // Success Step
+  // Success Step
   return (
     <div className="max-w-md mx-auto px-4 py-16 text-center">
       <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-pet-orange flex flex-col items-center">
