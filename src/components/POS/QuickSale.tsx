@@ -525,28 +525,36 @@ const QuickSale: React.FC = () => {
 
       // Update order with delivery fee, voucher, notes and payment status
       const updateData: any = {
-        total_amount: calculateTotal()
+        total_amount: calculateTotal(),
+        delivery_fee: calculateDeliveryFee()
       };
       
-      let saleNotes = notes ? `${notes}` : '';
+      let saleNotesParts: string[] = [];
+      if (notes && notes.trim()) {
+        saleNotesParts.push(notes.trim());
+      }
+      
+      const phoneToUse = customerPhone?.trim() || selectedCustomer?.phone?.trim();
+      if (phoneToUse) {
+        saleNotesParts.push(`Phone: ${phoneToUse}`);
+      }
+      
+      if (selectedCustomer?.address && selectedCustomer.address.trim()) {
+        saleNotesParts.push(`Saved Address: ${selectedCustomer.address.trim()}`);
+      }
+      
       if (selectedSubdivisionId) {
         const selected = activeSubdivisions.find(s => s.id === selectedSubdivisionId);
         if (selected) {
-          saleNotes += saleNotes ? ` | Subdivision: ${selected.name}` : `Subdivision: ${selected.name}`;
+          saleNotesParts.push(`Subdivision: ${selected.name}`);
         }
       }
-      if (appliedVoucher) {
-        saleNotes += saleNotes ? ` | Voucher: ${appliedVoucher.code}` : `Voucher: ${appliedVoucher.code}`;
-      }
-      if (calculateDeliveryFee() > 0) {
-        const deliveryFeeText = `Delivery Fee: ₱${calculateDeliveryFee().toFixed(2)}`;
-        saleNotes += saleNotes ? ` | ${deliveryFeeText}` : deliveryFeeText;
-      }
+      
+      let saleNotes = saleNotesParts.join(' | ');
       
       if (isPayLater) {
         updateData.payment_status = 'pending';
         updateData.order_status = 'completed'; // Order is completed, just payment is pending
-        saleNotes += saleNotes ? ' | Payment: Pending (Pay Later)' : 'Payment: Pending (Pay Later)';
       }
       
       if (saleNotes) {

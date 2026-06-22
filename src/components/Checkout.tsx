@@ -365,7 +365,7 @@ ${appliedVoucher ? `🏷️ Voucher Applied: ${appliedVoucher.code} (-₱${vouch
 
 💳 Payment: ${paymentMethod === 'cash' ? 'Cash' : (isQRPH ? 'QR Ph (+1% transaction fee)' : (selectedPaymentMethod?.name || paymentMethod))}
 ${paymentMethod === 'cash'
-          ? `💰 Customer to pay with: ₱${cashAmountPaid || '0.00'}\n${cashChange !== '0.00' ? `🔄 Change to be provided: ₱${cashChange}` : ''}${cashChangeNeeded ? `\n📝 Change Note: ${cashChangeNeeded}` : ''}`
+          ? `💰 Customer to pay with: ₱${cashAmountPaid || '0.00'}\n${cashChange !== '0.00' ? `🔄 Change to be provided: ₱${cashChange}` : ''}${cashChangeNeeded ? `\n📝 Note: ${cashChangeNeeded}` : ''}`
           : `📸 Payment Screenshot: Please attach your payment receipt screenshot${isQRPH ? '\n💡 Note: 1% QR PH convenience fee included' : ''}`}
 
 ${notes ? `📝 Notes: ${notes}` : ''}
@@ -846,10 +846,10 @@ Please confirm this order to proceed. Thank you for choosing For Your Pets Only!
                   setCashChangeNeeded('');
                 }}
                 className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center space-x-3 w-full ${serviceType === 'lalamove'
-                    ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                    : paymentMethod === 'cash'
-                      ? 'border-pet-orange bg-pet-orange text-white'
-                      : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
+                  ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                  : paymentMethod === 'cash'
+                    ? 'border-pet-orange bg-pet-orange text-white'
+                    : 'border-pet-orange/30 bg-white text-gray-700 hover:border-pet-orange'
                   }`}
               >
                 <Banknote className="h-6 w-6 text-current" />

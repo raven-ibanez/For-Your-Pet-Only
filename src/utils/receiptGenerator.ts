@@ -328,7 +328,7 @@ export const generateReceipt = (data: ReceiptData) => {
 
     <div class="footer">
       <div class="thank-you">Thank you for your purchase!</div>
-      ${data.notes ? `<div style="margin-top: 15px; padding: 8px; border: 1px dashed #000; background-color: #fafafa; font-size: 11px; text-align: left; white-space: pre-wrap;"><strong>Notes:</strong><br/>${data.notes}</div>` : ''}
+      ${data.notes ? `<div style="margin-top: 15px; padding: 8px; border: 1px dashed #000; background-color: #fafafa; font-size: 11px; font-family: Arial, Helvetica, sans-serif; text-align: left; white-space: pre-wrap;"><strong>Notes:</strong><br/>${data.notes}</div>` : ''}
       <div style="margin-top: 10px;">This is your official receipt.</div>
       <div style="margin-top: 5px;">Please keep this for your records.</div>
     </div>

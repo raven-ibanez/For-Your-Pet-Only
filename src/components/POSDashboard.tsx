@@ -105,7 +105,7 @@ const POSDashboard: React.FC = () => {
         })),
         subtotal: parseFloat(orderDetails.subtotal || 0),
         discount: parseFloat(orderDetails.discount_amount || 0),
-        deliveryFee: 0, // Not stored in order, set to 0
+        deliveryFee: parseFloat(orderDetails.delivery_fee || 0),
         total: parseFloat(orderDetails.total_amount || 0),
         paymentMethod: payments.length > 1 ? 'Multiple Payments' : (payments[0]?.payment_method || orderDetails.payment_status || 'Unknown'),
         amountPaid: payments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || 0), 0) || undefined,
